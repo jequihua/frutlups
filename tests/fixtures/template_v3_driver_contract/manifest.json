@@ -1,0 +1,276 @@
+{
+  "manifest_schema": "frutlups.template_v3_driver_contract_fixture_manifest.v1",
+  "manifest_version": 1,
+  "recorded": "2026-08-02",
+  "milestone": "M001",
+  "slice": "M001-S01",
+  "owning_contract": "02_analysis/frutlups_native_template_v3_driver_and_authority_contract.md",
+  "bundle_root": "08_pkg/tests/fixtures/template_v3_driver_contract",
+  "digest_basis": "sha256_of_the_bundle_file_bytes_as_written_lf_only",
+  "digest_note": "Every bundle file is LF-only with exactly one final newline and no BOM, and the repository `.gitattributes` declares `* text=auto eol=lf`, so the worktree bytes hashed here equal the committed blob bytes on every platform. For the two committed-byte-derived inputs the recorded digest is also the committed-blob SHA-256 of the pinned source path, reproducible with `git cat-file blob <source_commit>:<source_path>` in the recorded source role.",
+  "non_authority": "This manifest carries no authority. It records provenance and coverage only. It does not make any artifact current, native-schema-valid, correctly paired, accepted, safe to write, executable, or human-authorized.",
+  "manifest_is_not_a_classifiable_input": {
+    "path": "manifest.json",
+    "provenance_class": "authored_here",
+    "classifiable_input": false,
+    "statement": "manifest.json is metadata about fixtures, not a Markdown/native-region input. It never receives a native-region class, a pinned oracle row, or a native eligibility result."
+  },
+  "bundle_completeness": {
+    "durable_file_count": 6,
+    "json_manifest_count": 1,
+    "markdown_input_count": 5,
+    "committed_byte_derived_count": 2,
+    "synthetic_count": 3,
+    "double_counting_rule": "the two committed-byte-derived inputs ARE two of the five Markdown inputs and are never counted as additional files",
+    "closed_bundle": "exactly these six files exist under the bundle root; no upstream pinned fixture and no scratch-only probe is promoted into the bundle"
+  },
+  "layer_model": {
+    "layer_1": "native-region classification; one of the seven declared native classes under the contract's deterministic precedence",
+    "layer_2": "independent pinned OKF/profile oracle outcome; one of the ten rows of 04_delivery/frutlups_okf_kickoff_handoff/09_template_candidate_consumer_contract.md section 4, or not_applicable with a stated reason",
+    "layer_3": "native eligibility, computed from the Layer 1 class plus the accepted authority decisions and never from Layer 2",
+    "independence_rule": "the oracle outcome never selects the Layer 1 class, and the Layer 1 class never selects the oracle row"
+  },
+  "coverage_references": {
+    "native_classes_declared": 7,
+    "native_classes_covered_by_bundle": [
+      "NC3_dual_region_conflict",
+      "NC4_workflow_schema_invalid",
+      "NC5_legacy_leading_workflow",
+      "NC6_native_fenced_workflow"
+    ],
+    "native_classes_covered_by_scratch_only_probe": [
+      "NC1_frame_unterminated",
+      "NC2_region_unparseable",
+      "NC7_no_workflow_region"
+    ],
+    "pinned_oracle_rows_total": 10,
+    "pinned_oracle_row_coverage_source": "the 24 upstream pinned fixtures recorded in <TEMPLATE_V3_BASELINE>/tests/fixtures/okf_profile/manifest.json (schema okf_profile_fixture_manifest v1); row 6 is a profile contract class with no committed fixture and is checked against the canonical profile decision matrix",
+    "pinned_oracle_rows_touched_by_this_bundle": [
+      1,
+      3,
+      8
+    ],
+    "bundle_is_not_the_oracle_coverage_source": "the five Markdown inputs each carry exactly one oracle row for their own record; they are not the coverage source for the ten rows and no oracle row is added, renamed, or re-derived here"
+  },
+  "verification_procedure": [
+    "1. For every entry in `fixtures`, recompute SHA-256 over the bundle file bytes and require exact equality with the recorded `sha256`; a mismatch is a provenance failure and the bundle is rejected.",
+    "2. For every entry whose `provenance_class` is `committed_byte_derived`, additionally recompute `git cat-file blob <source_commit>:<source_path>` in the recorded `source_role_token` and require exact equality with `source_committed_blob_sha256`.",
+    "3. Require exactly six files under `bundle_root`: this manifest plus the five recorded Markdown paths; any additional or missing file is a bundle-cardinality failure.",
+    "4. Require that `manifest.json` carries no native-region class, no pinned oracle row, and no native eligibility result.",
+    "5. Require that every Markdown entry carries exactly one `native_region_class` and exactly one `pinned_oracle` row (or `not_applicable` with a stated reason)."
+  ],
+  "fixtures": [
+    {
+      "fixture_id": "template_v3_prompt_012_unprofiled",
+      "path": "template_v3_prompt_012_unprofiled.md",
+      "provenance_class": "committed_byte_derived",
+      "source_role_token": "<TEMPLATE_V3_DESIGN_SOURCE>",
+      "source_commit": "4b48a2483e8ee5b9fecd1f028dfd06871133d408",
+      "source_path": "prompts/for_coding_agent/012_add_deterministic_okf_navigation_views.md",
+      "source_role": "template_v3_prompt_example_unprofiled",
+      "classifiable_input": true,
+      "coverage_row": {
+        "markdown_framing_state": "absent",
+        "concept_frontmatter_state": "absent",
+        "workflow_metadata_location": "declared_fenced_block",
+        "workflow_metadata_parse_state": "parsed",
+        "workflow_metadata_schema_state": "schema_valid",
+        "observed_routing_fields": {
+          "milestone": "M004",
+          "slice": "S01"
+        },
+        "dual_region_conflict_state": "none",
+        "native_region_class": "NC6_native_fenced_workflow",
+        "pinned_oracle": {
+          "row": 1,
+          "input_class": "No opening `---` delimiter on the first line - legacy Markdown",
+          "okf_concept": "not_evaluated",
+          "okf_reason": null,
+          "framework_profile": "not_applicable",
+          "framework_profile_reason": null,
+          "execution_eligibility": "not_evaluated"
+        },
+        "native_eligibility": {
+          "result": "eligible_for_native_routing",
+          "native_identity": {
+            "milestone_id": "M004",
+            "slice_id": "M004-S01"
+          },
+          "reason": "single located workflow region in the declared fenced block, parsed and schema-valid; eligibility remains subject to the authority table (frontier, pairing, human gate) and is never granted by any profile result"
+        }
+      },
+      "sha256": "63e2547f9d4bcb2fe9bbbda5a7dc9fd5ad024df8127df04044db50af17dad6ce",
+      "byte_length": 15190,
+      "source_committed_blob_sha256": "63e2547f9d4bcb2fe9bbbda5a7dc9fd5ad024df8127df04044db50af17dad6ce"
+    },
+    {
+      "fixture_id": "template_v3_prompt_013_profiled",
+      "path": "template_v3_prompt_013_profiled.md",
+      "provenance_class": "committed_byte_derived",
+      "source_role_token": "<TEMPLATE_V3_DESIGN_SOURCE>",
+      "source_commit": "4b48a2483e8ee5b9fecd1f028dfd06871133d408",
+      "source_path": "prompts/for_coding_agent/013_integrate_opt_in_okf_authoring_and_migration.md",
+      "source_role": "template_v3_prompt_example_profiled",
+      "classifiable_input": true,
+      "coverage_row": {
+        "markdown_framing_state": "present_and_closed",
+        "concept_frontmatter_state": "well_formed",
+        "workflow_metadata_location": "declared_fenced_block",
+        "workflow_metadata_parse_state": "parsed",
+        "workflow_metadata_schema_state": "schema_valid",
+        "observed_routing_fields": {
+          "milestone": "M005",
+          "slice": "S01"
+        },
+        "dual_region_conflict_state": "none",
+        "native_region_class": "NC6_native_fenced_workflow",
+        "pinned_oracle": {
+          "row": 3,
+          "input_class": "Profile-valid form (minimum two-field block)",
+          "okf_concept": "pass",
+          "okf_reason": null,
+          "framework_profile": "pass",
+          "framework_profile_reason": null,
+          "execution_eligibility": "not_evaluated"
+        },
+        "native_eligibility": {
+          "result": "eligible_for_native_routing",
+          "native_identity": {
+            "milestone_id": "M005",
+            "slice_id": "M005-S01"
+          },
+          "reason": "concept frontmatter is never routing, so the single located workflow region is the declared fenced block; the contract assigns this input the same native class as the unprofiled example, while the accepted source at the pin returns empty routing for it - that difference is the recorded native defect, not a contract exception"
+        }
+      },
+      "sha256": "d96fb2cb8ef60adec7b9313bfb1d303aa729ea34d492d9984c2b5dd2a6e6bd7f",
+      "byte_length": 14336,
+      "source_committed_blob_sha256": "d96fb2cb8ef60adec7b9313bfb1d303aa729ea34d492d9984c2b5dd2a6e6bd7f"
+    },
+    {
+      "fixture_id": "legacy_leading_workflow_prompt",
+      "path": "legacy_leading_workflow_prompt.md",
+      "provenance_class": "synthetic",
+      "source_role_token": null,
+      "source_commit": null,
+      "source_path": null,
+      "source_role": null,
+      "classifiable_input": true,
+      "synthetic_description": "v2-era prompt whose routing lives in a first-line `---` block carrying no `type` and no `framework_profile`; eight required native sections present; LF-only, no machine-local value",
+      "coverage_row": {
+        "markdown_framing_state": "present_and_closed",
+        "concept_frontmatter_state": "framed_well_formed_no_concept_fields",
+        "workflow_metadata_location": "leading_block_legacy_branch",
+        "workflow_metadata_parse_state": "parsed",
+        "workflow_metadata_schema_state": "schema_valid",
+        "observed_routing_fields": {
+          "milestone": "M002",
+          "slice": "S01"
+        },
+        "dual_region_conflict_state": "none",
+        "native_region_class": "NC5_legacy_leading_workflow",
+        "pinned_oracle": {
+          "row": 8,
+          "input_class": "Missing or empty `type` in well-formed frontmatter",
+          "okf_concept": "fail",
+          "okf_reason": "OKF_TYPE_MISSING",
+          "framework_profile": "not_applicable",
+          "framework_profile_reason": null,
+          "execution_eligibility": "not_evaluated"
+        },
+        "native_eligibility": {
+          "result": "eligible_for_native_routing",
+          "native_identity": {
+            "milestone_id": "M002",
+            "slice_id": "M002-S01"
+          },
+          "reason": "the legacy compatibility branch applies because the first-line block carries neither `type` nor `framework_profile`; the concurrent OKF `fail` OKF_TYPE_MISSING is an independent Layer 2 observation and does not reduce native eligibility"
+        }
+      },
+      "sha256": "18217ae04c0df35b89ae6e5cdc7c4c5451d9e4cf027a852d02842afe04a6bbb7",
+      "byte_length": 820
+    },
+    {
+      "fixture_id": "conflicting_dual_workflow_prompt",
+      "path": "conflicting_dual_workflow_prompt.md",
+      "provenance_class": "synthetic",
+      "source_role_token": null,
+      "source_commit": null,
+      "source_path": null,
+      "source_role": null,
+      "classifiable_input": true,
+      "synthetic_description": "routing field names present in both the legacy leading region and the declared fenced region with different values; LF-only, no machine-local value",
+      "coverage_row": {
+        "markdown_framing_state": "present_and_closed",
+        "concept_frontmatter_state": "framed_well_formed_no_concept_fields",
+        "workflow_metadata_location": "both_leading_block_legacy_branch_and_declared_fenced_block",
+        "workflow_metadata_parse_state": "parsed",
+        "workflow_metadata_schema_state": "schema_valid_in_each_region_independently",
+        "observed_routing_fields": {
+          "leading": {
+            "milestone": "M003",
+            "slice": "S01"
+          },
+          "fenced": {
+            "milestone": "M007",
+            "slice": "S04"
+          }
+        },
+        "dual_region_conflict_state": "conflicting fields: `milestone`, `slice`",
+        "native_region_class": "NC3_dual_region_conflict",
+        "pinned_oracle": {
+          "row": 8,
+          "input_class": "Missing or empty `type` in well-formed frontmatter",
+          "okf_concept": "fail",
+          "okf_reason": "OKF_TYPE_MISSING",
+          "framework_profile": "not_applicable",
+          "framework_profile_reason": null,
+          "execution_eligibility": "not_evaluated"
+        },
+        "native_eligibility": {
+          "result": "ineligible_refused",
+          "native_identity": null,
+          "reason": "the accepted conflict rule is deterministic refusal with a bounded diagnostic naming the conflicting field names and the two region locations; frutlups must never guess silently"
+        }
+      },
+      "sha256": "dd34932d6d0bd709c9dc382f0fc9b35658b138765c10add5007e65fdbc504d5d",
+      "byte_length": 1016
+    },
+    {
+      "fixture_id": "profile_valid_native_invalid_prompt",
+      "path": "profile_valid_native_invalid_prompt.md",
+      "provenance_class": "synthetic",
+      "source_role_token": null,
+      "source_commit": null,
+      "source_path": null,
+      "source_role": null,
+      "classifiable_input": true,
+      "synthetic_description": "profile-valid two-field concept frontmatter over a declared fenced workflow block that parses but supplies no `milestone` and no `slice`; LF-only, no machine-local value",
+      "coverage_row": {
+        "markdown_framing_state": "present_and_closed",
+        "concept_frontmatter_state": "well_formed",
+        "workflow_metadata_location": "declared_fenced_block",
+        "workflow_metadata_parse_state": "parsed",
+        "workflow_metadata_schema_state": "schema_invalid",
+        "observed_routing_fields": {},
+        "dual_region_conflict_state": "none",
+        "native_region_class": "NC4_workflow_schema_invalid",
+        "pinned_oracle": {
+          "row": 3,
+          "input_class": "Profile-valid form (minimum two-field block)",
+          "okf_concept": "pass",
+          "okf_reason": null,
+          "framework_profile": "pass",
+          "framework_profile_reason": null,
+          "execution_eligibility": "not_evaluated"
+        },
+        "native_eligibility": {
+          "result": "ineligible_native_schema_failure",
+          "native_identity": null,
+          "reason": "the located workflow region supplies no native routing identity; the Layer 2 profile `pass` grants nothing and never converts a native schema failure into eligibility"
+        }
+      },
+      "sha256": "f63942404a24322b1c118cf137cf3eec768b56e5dfb60ba98440443db584680e",
+      "byte_length": 943
+    }
+  ]
+}

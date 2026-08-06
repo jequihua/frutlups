@@ -1,0 +1,2 @@
+# Keep text byte-stable across platforms. Binary files detected by Git remain binary.
+* text=auto eol=lf

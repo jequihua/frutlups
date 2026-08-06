@@ -1,0 +1,7 @@
+# Ship the complete, self-contained product test suite in the source distribution
+# so the tests — including their immutable fixture data, such as the
+# ``front_repo_contract`` bundle — are runnable from an extracted sdist. The built
+# wheel is unaffected: the tests are not an installed package and never become
+# wheel members (the wheel ships only ``src/frutlups`` plus ``py.typed``).
+graft tests
+global-exclude *.pyc *.pyo

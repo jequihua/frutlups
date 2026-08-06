@@ -1,0 +1,37 @@
+{
+  "bundle": "front_repo_contract",
+  "purpose": "Self-contained, immutable copies of the exact repository inputs that the shipped product tests need, so the flattened front-facing frutlups repository runs its complete suite without reading a parent, sibling, development prompt directory, root layout, or development checker. Copied byte-for-byte from committed blobs at the accepted product commit; the checker is a test-only oracle and never product, public API, runtime dependency, or wheel member.",
+  "source_commit": "80f9b52e10ba278b7c44c476fcf3cd525f22e987",
+  "fixtures": [
+    {
+      "source_path": "prompts/templates/coding_prompt.md",
+      "destination": "coding_prompt.md",
+      "sha256": "05c2f34172da7f59eb0eadfd51bba0b09bc5ce2d6edd49e2515a59d3443dc917",
+      "purpose": "configured coding scaffold"
+    },
+    {
+      "source_path": "prompts/templates/review_prompt.md",
+      "destination": "review_prompt.md",
+      "sha256": "2741646b8c014101b7e7c4b36f08412eb8830bd3f61d28a6c9c925a91ba1a4a2",
+      "purpose": "configured review scaffold"
+    },
+    {
+      "source_path": "prompts/templates/self_report.md",
+      "destination": "self_report.md",
+      "sha256": "72ca37cbbdfc4581d17b0d6dc6b3a0c59cd3b9be3883fa9ea7b902105b9a13ac",
+      "purpose": "configured self-report scaffold"
+    },
+    {
+      "source_path": "frutlups.layout.yaml",
+      "destination": "frutlups.layout.yaml",
+      "sha256": "963dd4ae11fa4a762e1dde1e2d48289f64f29e07238455bfd5f5ef5ae1774c48",
+      "purpose": "template-v3 layout contract"
+    },
+    {
+      "source_path": "scripts/okf_yaml_profile.py",
+      "destination": "okf_yaml_profile.py",
+      "sha256": "8cb8035839866fd78289b67ac5da02ffb42dce28c2f5cf72d8287d2d462959ef",
+      "purpose": "test-only OKF/profile reference oracle"
+    }
+  ]
+}
