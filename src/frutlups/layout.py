@@ -274,6 +274,16 @@ class LayoutProfile:
     pull_request_policy: PullRequestPolicy = _DEFAULT_PULL_REQUEST_POLICY
     # Advisory redesign-repo validation command (not the canonical generated cmd).
     validation_command_redesign: str = ""
+    # M003-S02 compatibility modes (owner note 008): closed vocabularies with
+    # behavior-preserving defaults. ``prompt_numbering`` describes how prompt
+    # filename sequences are allocated/analysed ("per_kind_sequence" |
+    # "global_flat_sequence"); ``prompt_pairing`` selects how coding and
+    # review prompts pair ("same_sequence" | "workflow_metadata");
+    # ``reports_discovery`` selects the acceptance-evidence inventory shape
+    # under the configured reviews root ("flat" | "recursive_contained").
+    prompt_numbering: str = "per_kind_sequence"
+    prompt_pairing: str = "same_sequence"
+    reports_discovery: str = "flat"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -314,6 +324,9 @@ class LayoutProfile:
             "current_truth_fields": list(self.current_truth_fields),
             "validation_command": self.validation_command,
             "validation_command_redesign": self.validation_command_redesign,
+            "prompt_numbering": self.prompt_numbering,
+            "prompt_pairing": self.prompt_pairing,
+            "reports_discovery": self.reports_discovery,
             "automation_boundary": self.automation_boundary.to_dict(),
             "git_policy": self.git_policy.to_dict(),
             "pull_request_policy": self.pull_request_policy.to_dict(),
@@ -810,6 +823,63 @@ def profile_from_config(
     git_policy = _git_policy_from_config(_get(config, "git_policy"))
     pull_request_policy = _pull_request_policy_from_config(_get(config, "pull_request_policy"))
 
+    # M003-S02 compatibility modes (owner note 008): closed vocabularies. For
+    # the new ``pairing``/``discovery`` keys an unknown declared value is an
+    # ERROR diagnostic with a fallback to the behavior-preserving default,
+    # because a silently mis-typed mode would change pairing or evidence
+    # semantics. ``prompts.numbering`` historically carried free advisory
+    # prose in accepted configs, so an unrecognized value there keeps the
+    # historical silent-ignore behavior; only the exact
+    # ``global_flat_sequence`` token activates the global mode.
+    def _mode_value(
+        label: str,
+        raw: object,
+        allowed: tuple[str, ...],
+        fallback: str,
+        *,
+        strict: bool,
+    ) -> str:
+        if raw is None:
+            return fallback
+        value = _as_str(raw, "")
+        if value in allowed:
+            return value
+        if strict:
+            diagnostics.append(
+                LayoutDiagnostic(
+                    code="unsupported_layout_mode",
+                    severity=LayoutDiagnosticSeverity.ERROR,
+                    message=(
+                        f"layout config {label}={value!r} is not in the closed "
+                        f"vocabulary {sorted(allowed)}; falling back to "
+                        f"{fallback!r}"
+                    ),
+                )
+            )
+        return fallback
+
+    prompt_numbering = _mode_value(
+        "prompts.numbering",
+        _get(config, "prompts", "numbering"),
+        ("per_kind_sequence", "global_flat_sequence"),
+        base.prompt_numbering,
+        strict=False,
+    )
+    prompt_pairing = _mode_value(
+        "prompts.pairing",
+        _get(config, "prompts", "pairing"),
+        ("same_sequence", "workflow_metadata"),
+        base.prompt_pairing,
+        strict=True,
+    )
+    reports_discovery = _mode_value(
+        "reports.discovery",
+        _get(config, "reports", "discovery"),
+        ("flat", "recursive_contained"),
+        base.reports_discovery,
+        strict=True,
+    )
+
     diagnostics.extend(_advisory_path_diagnostics(config))
 
     profile = LayoutProfile(
@@ -853,6 +923,9 @@ def profile_from_config(
         automation_boundary=automation_boundary,
         git_policy=git_policy,
         pull_request_policy=pull_request_policy,
+        prompt_numbering=prompt_numbering,
+        prompt_pairing=prompt_pairing,
+        reports_discovery=reports_discovery,
     )
     return profile, tuple(diagnostics)
 

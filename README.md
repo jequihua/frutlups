@@ -27,6 +27,22 @@ writes, nothing more.
 Legacy, v2, and template-v3 repository layouts are all supported; marker-free
 legacy Markdown remains first-class.
 
+A committed layout config may additionally opt into two closed layout modes
+(each defaults to the historical behavior when absent):
+
+- `reports.discovery: recursive_contained` — the acceptance-evidence scan
+  accepts milestone subdirectories beneath the configured reviews root. The
+  inventory is deterministic, stays inside the resolved root, treats ordinary
+  files only (link-like entries are never evidence), and fails closed on
+  escaped, duplicate, or contradictory authority. `flat` keeps the exact
+  historical single-directory behavior.
+- `prompts.numbering: global_flat_sequence` with
+  `prompts.pairing: workflow_metadata` — coding and review prompts share one
+  global number sequence and pair through their validated workflow metadata
+  (canonical milestone/slice identity and explicit prompt references), never
+  through filename parity, slugs, or proximity; ambiguity fails closed.
+  `same_sequence` keeps the historical per-kind equal-sequence pairing.
+
 ## Runner integration surface
 
 An automated runner consumes two read-only, versioned surfaces and may ask
