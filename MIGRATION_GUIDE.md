@@ -49,6 +49,15 @@ next action is:
     reviews/           # self-reports, review reports, verdict records
 ```
 
+Projects that keep review evidence in per-milestone subdirectories
+(`reviews/m001/…`) can declare `reports.discovery: recursive_contained` in the
+committed layout config instead of flattening their history; projects whose
+coding and review prompts share one global number sequence can declare
+`prompts.numbering: global_flat_sequence` with
+`prompts.pairing: workflow_metadata` so prompts pair by their validated
+workflow metadata instead of equal sequence numbers. Both modes are opt-in;
+absent keys keep the historical flat/same-sequence behavior (see `README.md`).
+
 The roadmap formats matter. In `active_roadmap_frutlups.md`, a milestone is a
 heading with a status, for example:
 

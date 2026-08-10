@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -796,6 +797,7 @@ def _build_status_with_evidence(
                 )
 
     prompt_artifacts = inventory_prompts(paths.prompts)
+    health_profile = layout.loaded.profile if layout.loaded is not None else None
     status = ProjectStatus(
         root=layout.root,
         missing_required_directories=paths.required_missing,
@@ -808,7 +810,19 @@ def _build_status_with_evidence(
         next_slice=next_slice,
         prompts=_inventory_prompts(paths),
         prompt_artifacts=prompt_artifacts,
-        prompt_health=compute_prompt_health(prompt_artifacts),
+        prompt_health=compute_prompt_health(
+            prompt_artifacts,
+            numbering=(
+                health_profile.prompt_numbering
+                if health_profile is not None
+                else "per_kind_sequence"
+            ),
+            pairing=(
+                health_profile.prompt_pairing
+                if health_profile is not None
+                else "same_sequence"
+            ),
+        ),
         memory=detect_memory(layout.root, runner=memory_runner),
         diagnostics=tuple(diagnostics),
         layout=layout.loaded,
@@ -934,6 +948,45 @@ def build_coding_prompt_plan(
     return _build_coding_prompt_plan_from_status(
         status, sequence=sequence, slug=slug, memory_runner=memory_runner
     )
+
+
+def _workflow_metadata_yaml_value(value: str) -> str:
+    """One double-quoted YAML scalar; prose titles never break the region."""
+
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _with_workflow_metadata_block(
+    content: str, template: CodingPromptTemplate, profile: LayoutProfile
+) -> str:
+    """Inject the canonical fenced workflow-metadata block after the title.
+
+    M003-S02 (owner note 008): the block uses the profile's configured
+    routing field names and becomes the first fenced YAML region, so the
+    same two-region observation that pairs authored prompts validates the
+    generated prompt. Milestone/slice ids come from the already validated
+    roadmap spine; the free-form title is emitted as one double-quoted
+    scalar.
+    """
+
+    block = (
+        "Workflow metadata:\n"
+        "\n"
+        "```yaml\n"
+        f"{profile.front_matter_milestone_field}: {template.milestone_id}\n"
+        f"{profile.front_matter_slice_field}: {template.slice_id}\n"
+        f"{profile.front_matter_title_field}: "
+        f"{_workflow_metadata_yaml_value(template.title)}\n"
+        "role: coder\n"
+        "```\n"
+    )
+    lines = content.splitlines(keepends=True)
+    if lines and lines[0].startswith("# "):
+        head = lines[0]
+        rest = "".join(lines[1:]).lstrip("\n")
+        return f"{head}\n{block}\n{rest}"
+    return f"{block}\n{content}"
 
 
 def _build_coding_prompt_plan_from_status(
@@ -1071,6 +1124,17 @@ def _build_coding_prompt_plan_from_status(
         render = _render_coding_from_scaffold(status, profile, template)
     else:
         render = render_coding_prompt(template, snippet=snippet if snippet.has_content else None)
+    if render.valid and profile.prompt_pairing == "workflow_metadata":
+        # M003-S02 (owner note 008): under the configured metadata pairing
+        # the generated coding prompt must carry the same validated fenced
+        # identity the pairing decision consumes. Template-v3 profiles
+        # deliberately do not parse the roadmap-item body, so a generated
+        # prompt without a metadata region would be invisible to its own
+        # loop and the resume step could never advance past it.
+        render = replace(
+            render,
+            content=_with_workflow_metadata_block(render.content, template, profile),
+        )
     preview = preview_coding_prompt(template, prompt_dir=profile.coding_prompt_dir)
     preview = _reconciled_preview(preview, render)
 
@@ -1260,6 +1324,8 @@ def _is_slice_accepted_by_nonterminal_evidence(
 # does not parse to ``pass`` is typed, deterministic contradictory state — never
 # inferred from filenames, record prose, journal entries, or profile data.
 
+_MAX_DISCOVERY_DEPTH = 12
+_MAX_DISCOVERY_ENTRIES = 20_000
 _MAX_EVIDENCE_BYTES = 256 * 1024
 _MAX_EVIDENCE_LINES = 4000
 _MAX_EVIDENCE_DIAGNOSTIC = 240
@@ -1497,7 +1563,13 @@ def _read_record_evidence(
                     or re.match(r"^[A-Za-z]:", candidate)
                     or any(part in ("", ".", "..") for part in parts)
                     or not candidate.startswith(reviews_prefix)
-                    or "/" in candidate[len(reviews_prefix):]
+                    or (
+                        # M003-S02: contained nested citations are legal only
+                        # under the configured recursive discovery mode; flat
+                        # layouts keep the exact flat citation grammar.
+                        profile.reports_discovery != "recursive_contained"
+                        and "/" in candidate[len(reviews_prefix):]
+                    )
                 ):
                     citation_unsafe = True
                 else:
@@ -1638,6 +1710,49 @@ def _make_authority_defect(
     )
 
 
+class _DiscoveryBoundExceeded(Exception):
+    """The bounded contained inventory exceeded its depth or entry bound."""
+
+
+def _contained_review_inventory(
+    reviews_dir_abs: Path, reviews_rel: str
+) -> list[tuple[Path, str]]:
+    """One bounded deterministic recursive inventory of ordinary files.
+
+    M003-S02 (owner note 008): the configured reviews root may contain
+    milestone subdirectories. The inventory is no-follow — symlinked
+    directories are never descended and symlink file aliases never become
+    evidence (deeper reparse aliases are additionally fenced by the
+    caller's resolved-containment checks) — collects ordinary files only,
+    and orders candidates by canonical repository-relative path. Exceeding
+    the depth or entry bound raises :class:`_DiscoveryBoundExceeded`, which
+    the caller types as an unresolvable authority root.
+    """
+
+    inventory: list[tuple[Path, str]] = []
+    examined = 0
+    base_depth = len(reviews_dir_abs.parts)
+    for dirpath, dirnames, filenames in os.walk(reviews_dir_abs, followlinks=False):
+        current = Path(dirpath)
+        if len(current.parts) - base_depth >= _MAX_DISCOVERY_DEPTH:
+            raise _DiscoveryBoundExceeded
+        dirnames.sort()
+        for name in sorted(filenames):
+            examined += 1
+            if examined > _MAX_DISCOVERY_ENTRIES:
+                raise _DiscoveryBoundExceeded
+            entry = current / name
+            try:
+                if entry.is_symlink() or not entry.is_file():
+                    continue
+            except OSError:
+                continue
+            rel = entry.relative_to(reviews_dir_abs).as_posix()
+            inventory.append((entry, f"{reviews_rel}/{rel}"))
+    inventory.sort(key=lambda pair: pair[1])
+    return inventory
+
+
 def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _AcceptanceEvidence:
     """Classify review reports and verdict records from one selected snapshot.
 
@@ -1724,11 +1839,20 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
     # profile's physical suffixes are preserved for generated/expected paths;
     # normalization is classification only.
     try:
-        entries = sorted(
-            (entry for entry in reviews_dir_abs.iterdir() if entry.is_file()),
-            key=lambda entry: entry.name,
-        )
-    except (OSError, RuntimeError):
+        if profile.reports_discovery == "recursive_contained":
+            # M003-S02 (owner note 008): one bounded deterministic contained
+            # inventory beneath the exact resolved configured reviews root.
+            inventory = _contained_review_inventory(reviews_dir_abs, reviews_rel)
+        else:
+            inventory = sorted(
+                (
+                    (entry, f"{reviews_rel}/{entry.name}")
+                    for entry in reviews_dir_abs.iterdir()
+                    if entry.is_file()
+                ),
+                key=lambda pair: pair[1],
+            )
+    except (OSError, RuntimeError, _DiscoveryBoundExceeded):
         return _AcceptanceEvidence(
             (),
             (),
@@ -1742,18 +1866,18 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
         )
     record_suffix_cf = profile.verdict_record_suffix.casefold()
     report_suffix_cf = profile.review_report_suffix.casefold()
-    record_entries: list[Path] = []
-    report_entries: list[Path] = []
-    for entry in entries:
+    record_entries: list[tuple[Path, str]] = []
+    report_entries: list[tuple[Path, str]] = []
+    for entry, entry_rel in inventory:
         name_cf = entry.name.casefold()
         if name_cf.endswith(record_suffix_cf):
-            record_entries.append(entry)
+            record_entries.append((entry, entry_rel))
         elif name_cf.endswith(report_suffix_cf):
-            report_entries.append(entry)
+            report_entries.append((entry, entry_rel))
 
     accepted: list[str] = []
     passing_reports: dict[str, str] = {}
-    for report in report_entries:
+    for report, report_entry_rel in report_entries:
         match = report_re.match(report.name)
         if not match:
             continue
@@ -1764,28 +1888,30 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
             authority_defects.append(
                 _make_authority_defect(
                     _AuthorityDefectKind.ESCAPED_AUTHORITY_REPORT,
-                    f"{reviews_rel}/{report.name}",
+                    report_entry_rel,
                 )
             )
             continue
         if not _has_pass_verdict(report):
             continue
         slice_id = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
-        passing_reports[f"{reviews_rel}/{report.name}"] = slice_id
+        passing_reports[report_entry_rel] = slice_id
         if slice_id not in accepted:
             accepted.append(slice_id)
 
     contradictions: list[_VerdictRecordContradiction] = []
     receipted: set[str] = set()
     closure_receipts: list[_ClosureReceipt] = []
-    for record in record_entries:
+    for record, record_rel in record_entries:
         match = record_re.match(record.name)
         if not match:
             continue
         record_slice = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
-        record_rel = f"{reviews_rel}/{record.name}"
         stem = record.name[: -len(profile.verdict_record_suffix)]
-        expected_rel = f"{reviews_rel}/{stem}{profile.review_report_suffix}"
+        # The same-directory sibling is the safe expected label, so nested
+        # records pair beside themselves rather than at the reviews root.
+        record_dir_rel = record_rel.rsplit("/", 1)[0]
+        expected_rel = f"{record_dir_rel}/{stem}{profile.review_report_suffix}"
         report_rel = expected_rel
         closure = _ClosureFields(valid=False)
         kind: _RecordContradictionKind | None = None
@@ -2161,10 +2287,17 @@ def _region_has_routing(mapping: dict[str, object], routing_fields: tuple[str, s
     return bool(normalized & {routing_fields[0], routing_fields[1]})
 
 
-def _workflow_routing_mapping(
+def _workflow_selected_mapping(
     content: str, profile: LayoutProfile
-) -> tuple[dict[str, str], tuple[str, ...]]:
-    """Observe both metadata regions and select the routing mapping.
+) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+    """Observe both metadata regions and select the raw routing mapping.
+
+    Identical selection semantics to :func:`_workflow_routing_mapping` (each
+    region observed at most once, dual-conflict refusal, leading-wins on a
+    conflict-free dual), but returns the selected *raw* mapping so callers
+    that need non-routing metadata values (for example the validated
+    ``round`` used by workflow-metadata pairing, M003-S02) share the one
+    observation instead of re-framing regions.
 
     Region A (first-line ``---`` frame) and region B (first fenced YAML
     workflow block) are framed and loaded independently through the accepted
@@ -2183,9 +2316,9 @@ def _workflow_routing_mapping(
     case selects the complete normalized leading mapping, never merged with
     or supplemented from the fenced mapping.
 
-    Returns ``(flat_routing_mapping, errors)``. Any malformed or unterminated
-    present region fails closed before comparison: no identity, no fallback
-    to the other region. Never raises for constructible input.
+    Returns ``(selected_mapping_or_none, errors)``. Any malformed or
+    unterminated present region fails closed before comparison: no identity,
+    no fallback to the other region. Never raises for constructible input.
     """
 
     routing_fields = _routing_field_names(profile)
@@ -2242,8 +2375,8 @@ def _workflow_routing_mapping(
         fenced_flat = _flat_routing(fenced_map)
         conflicts = _dual_routing_conflicts(leading_flat, fenced_flat, routing_fields)
         if conflicts:
-            return {}, (_DUAL_CONFLICT_MESSAGE.format(roles=", ".join(conflicts)),)
-        return dict(leading_flat), ()
+            return None, (_DUAL_CONFLICT_MESSAGE.format(roles=", ".join(conflicts)),)
+        return leading_map, ()
 
     selected: dict[str, object] | None
     if fenced_routes:
@@ -2255,7 +2388,204 @@ def _workflow_routing_mapping(
     else:
         selected = fenced_map
 
+    return selected, ()
+
+
+def _workflow_routing_mapping(
+    content: str, profile: LayoutProfile
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    """Observe both metadata regions and select the flat routing mapping.
+
+    Thin normalization wrapper over :func:`_workflow_selected_mapping`; the
+    documented region, schema, concept, and dual-conflict semantics live
+    there and are unchanged.
+    """
+
+    selected, errors = _workflow_selected_mapping(content, profile)
+    if errors:
+        return {}, errors
     return (_flat_routing(selected) if selected else {}), ()
+
+
+def _workflow_round_value(mapping: dict[str, object]) -> int | None:
+    """Return the validated ``round`` metadata value, or ``None``.
+
+    Accepted only after the region schema validated the mapping: a plain
+    integer or all-digit string in ``1..999``. Anything else — booleans,
+    other types, zero/negative, or an out-of-range run — is ``None`` (no
+    repair, no filename inference).
+    """
+
+    for key, value in mapping.items():
+        if not isinstance(key, str) or key.strip().lower() != "round":
+            continue
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if 1 <= value <= 999 else None
+        if isinstance(value, str) and value.strip().isdigit():
+            number = int(value.strip())
+            return number if 1 <= number <= 999 else None
+        return None
+    return None
+
+
+_PAIRING_SLICE_LINE_RE = re.compile(
+    r"^Detailed roadmap slice: `(?P<value>[^`]{1,200})`$", re.MULTILINE
+)
+
+
+@dataclass(frozen=True)
+class _ReviewPromptPairing:
+    """Validated pairing facts of one review prompt (M003-S02, private).
+
+    ``valid`` is ``False`` for unreadable prompts, malformed or
+    dual-conflicting metadata (their existing owned refusals are
+    preserved), and prompts without a validated slice identity; such
+    prompts never pair and are never repaired from filenames.
+    ``coding_refs`` holds the exact backticked repository-relative
+    coding-prompt paths the review prompt explicitly references.
+    """
+
+    valid: bool
+    slice_id: str = ""
+    round_value: int | None = None
+    coding_refs: tuple[str, ...] = ()
+
+
+def _review_prompt_pairing_facts(
+    artifact: PromptArtifact, root: Path, profile: LayoutProfile
+) -> _ReviewPromptPairing:
+    """Read one review prompt's validated pairing identity. Never raises.
+
+    Identity comes from the validated workflow-metadata regions when
+    present; generated review prompts without metadata regions fall back to
+    the exact generated pairing line (``Detailed roadmap slice:``). Round
+    metadata is used only after validation. Parity, filename slugs, casing
+    repair, and proximity never contribute.
+    """
+
+    path = root / profile.review_prompt_dir / artifact.filename
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return _ReviewPromptPairing(valid=False)
+    if len(raw) > _MAX_EVIDENCE_BYTES:
+        return _ReviewPromptPairing(valid=False)
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _ReviewPromptPairing(valid=False)
+
+    slice_id = ""
+    round_value: int | None = None
+    if profile.parse_front_matter:
+        selected, region_errors = _workflow_selected_mapping(content, profile)
+        if region_errors:
+            return _ReviewPromptPairing(valid=False)
+        if selected:
+            flat = _flat_routing(selected)
+            _milestone, slice_candidate, _title = _meta_from_front_matter(
+                flat,
+                milestone_field=profile.front_matter_milestone_field,
+                slice_field=profile.front_matter_slice_field,
+                title_field=profile.front_matter_title_field,
+            )
+            if slice_candidate:
+                slice_id = slice_candidate
+                round_value = _workflow_round_value(selected)
+
+    if not slice_id:
+        line_match = _PAIRING_SLICE_LINE_RE.search(content)
+        if line_match:
+            raw_value = line_match.group("value").strip()
+            colon = raw_value.find(":")
+            slice_id = (raw_value[:colon] if colon > 0 else raw_value).strip()
+    if not slice_id:
+        return _ReviewPromptPairing(valid=False)
+
+    # Live-line reference extraction through the accepted CommonMark
+    # boundary: fenced/indented code never contributes a reference, and
+    # backtick spans are matched per live line so block fences cannot
+    # mispair with inline path spans.
+    prefix = profile.coding_prompt_dir.rstrip("/") + "/"
+    refs: list[str] = []
+    in_fence: tuple[str, int] | None = None
+    for line in content.splitlines():
+        if in_fence is not None:
+            if _closing_fence(line, in_fence[0], in_fence[1]):
+                in_fence = None
+            continue
+        if _is_indented_code(line):
+            continue
+        fence_open = _FENCE_OPEN.match(line)
+        if fence_open:
+            fence_run = fence_open.group(1)
+            in_fence = (fence_run[0], len(fence_run))
+            continue
+        for span in _PROMPT_BACKTICK_RE.findall(line):
+            candidate = span.strip().replace("\\", "/")
+            if (
+                candidate.startswith(prefix)
+                and candidate.endswith(".md")
+                and candidate not in refs
+            ):
+                refs.append(candidate)
+    return _ReviewPromptPairing(
+        valid=True,
+        slice_id=slice_id,
+        round_value=round_value,
+        coding_refs=tuple(refs),
+    )
+
+
+def _select_paired_review_prompt(
+    coding_artifact: PromptArtifact,
+    coding_slice_id: str,
+    prompt_artifacts: tuple[PromptArtifact, ...],
+    root: Path,
+    profile: LayoutProfile,
+) -> tuple[PromptArtifact | None, bool]:
+    """Select the review prompt paired to one coding prompt by metadata.
+
+    Returns ``(selected, ambiguous)``. Qualification: a validated review
+    prompt whose slice identity equals the coding prompt's slice and whose
+    explicit coding-prompt references (when present) include the coding
+    prompt's exact path. Disambiguation order: an explicit matching
+    reference beats slice-only candidates; validated round metadata may
+    then disambiguate (highest validated round). Any remaining multiplicity
+    is ambiguous and fails closed — never "latest wins".
+    """
+
+    slice_upper = coding_slice_id.upper()
+    coding_path = f"{profile.coding_prompt_dir}/{coding_artifact.filename}"
+    candidates: list[tuple[PromptArtifact, _ReviewPromptPairing]] = []
+    for artifact in prompt_artifacts:
+        if artifact.kind != PromptKind.REVIEW:
+            continue
+        facts = _review_prompt_pairing_facts(artifact, root, profile)
+        if not facts.valid or facts.slice_id.upper() != slice_upper:
+            continue
+        if facts.coding_refs and coding_path not in facts.coding_refs:
+            continue
+        candidates.append((artifact, facts))
+    if not candidates:
+        return None, False
+    if len(candidates) == 1:
+        return candidates[0][0], False
+    explicit = [
+        pair for pair in candidates if coding_path in pair[1].coding_refs
+    ]
+    if len(explicit) == 1:
+        return explicit[0][0], False
+    if explicit:
+        candidates = explicit
+    if all(pair[1].round_value is not None for pair in candidates):
+        highest = max(pair[1].round_value for pair in candidates)
+        top = [pair for pair in candidates if pair[1].round_value == highest]
+        if len(top) == 1:
+            return top[0][0], False
+    return None, True
 
 
 def _slice_slug(slice_id: str) -> str:
@@ -2779,6 +3109,8 @@ def _build_review_prompt_plan_from_status(
         elif artifact.kind == PromptKind.REVIEW:
             review_seqs.add(artifact.sequence)
 
+    metadata_pairing = profile.prompt_pairing == "workflow_metadata"
+
     selected_artifact: PromptArtifact | None = None
     if sequence is not None:
         if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
@@ -2791,6 +3123,28 @@ def _build_review_prompt_plan_from_status(
             errors.append(f"no coding prompt found for sequence {sequence:03d}")
             return _make_invalid_review_plan(frontier, sequence, slug or "", errors)
         selected_artifact = coding_seqs[sequence]
+    elif metadata_pairing:
+        # M003-S02: select the frontier slice's coding prompt through the
+        # same validated-metadata decision loop resume uses (highest
+        # sequence for the frontier slice), never by unmatched equal
+        # sequence.
+        if frontier.inferred_slice is None:
+            errors.append("no frontier slice found; cannot select a coding prompt")
+            return _make_invalid_review_plan(frontier, None, slug or "", errors)
+        frontier_slice_upper = frontier.inferred_slice.slice_id.upper()
+        slice_matches: list[tuple[int, PromptArtifact]] = []
+        for seq, artifact in coding_seqs.items():
+            candidate_meta = _parse_coding_prompt_meta(artifact, frontier.root, profile)
+            if candidate_meta.slice_id.upper() == frontier_slice_upper:
+                slice_matches.append((seq, artifact))
+        if not slice_matches:
+            errors.append(
+                "no coding prompt with validated metadata found for the "
+                f"frontier slice {frontier.inferred_slice.slice_id}"
+            )
+            return _make_invalid_review_plan(frontier, None, slug or "", errors)
+        slice_matches.sort(key=lambda pair: pair[0], reverse=True)
+        sequence, selected_artifact = slice_matches[0]
     else:
         unmatched = sorted(seq for seq in coding_seqs if seq not in review_seqs)
         if not unmatched:
@@ -2799,7 +3153,7 @@ def _build_review_prompt_plan_from_status(
         sequence = unmatched[-1]
         selected_artifact = coding_seqs[sequence]
 
-    if sequence in review_seqs and not overwrite:
+    if not metadata_pairing and sequence in review_seqs and not overwrite:
         errors.append(
             f"review prompt for sequence {sequence:03d} already exists; "
             "pass --overwrite to replace it"
@@ -2812,13 +3166,45 @@ def _build_review_prompt_plan_from_status(
             frontier, sequence, slug or "", list(meta.errors), selected_artifact, meta
         )
 
+    coding_sequence = sequence
+    if metadata_pairing:
+        # Already-paired and ambiguity checks use the one metadata pairing
+        # decision; ambiguity fails closed and is never resolved by "latest
+        # wins" or --overwrite.
+        paired, pairing_ambiguous = _select_paired_review_prompt(
+            selected_artifact,
+            meta.slice_id,
+            status.prompt_artifacts,
+            frontier.root,
+            profile,
+        )
+        if pairing_ambiguous:
+            errors.append(
+                f"ambiguous review-prompt pairing for {meta.slice_id}: "
+                "multiple qualifying review prompts already exist"
+            )
+            return _make_invalid_review_plan(
+                frontier, sequence, slug or "", errors, selected_artifact, meta
+            )
+        if paired is not None:
+            errors.append(
+                f"coding prompt {selected_artifact.filename} is already "
+                f"paired with review prompt {paired.filename}"
+            )
+            return _make_invalid_review_plan(
+                frontier, sequence, slug or "", errors, selected_artifact, meta
+            )
+        if profile.prompt_numbering == "global_flat_sequence":
+            # The new review prompt takes the next global flat sequence.
+            sequence = _next_prompt_sequence(status.prompt_artifacts)
+
     effective_slug = slug.strip() if isinstance(slug, str) and slug.strip() else meta.slug
     if not effective_slug:
         errors.append("could not derive a slug for the review prompt")
         return _make_invalid_review_plan(frontier, sequence, "", errors, selected_artifact, meta)
 
     coding_template = CodingPromptTemplate(
-        sequence=sequence,
+        sequence=coding_sequence,
         milestone_id=meta.milestone_id,
         slice_id=meta.slice_id,
         slug=meta.slug,
@@ -3135,10 +3521,21 @@ def _build_verdict_record_plan_from_profile(
     rr_name = rr_path.name
 
     # Derive target path from review report filename, using the profile's
-    # configured reviews directory and report/verdict suffixes.
+    # configured reviews directory and report/verdict suffixes. Under
+    # recursive discovery (M003-S02) a nested report keeps its contained
+    # subdirectory so the record is written beside the report it receipts.
     if rr_name.endswith(profile.review_report_suffix):
         stem = rr_name[: -len(profile.review_report_suffix)]
-        target_path = f"{profile.reviews_dir}/{stem}{profile.verdict_record_suffix}"
+        target_dir = profile.reviews_dir.rstrip("/")
+        if profile.reports_discovery == "recursive_contained":
+            try:
+                reviews_abs = (root / profile.reviews_dir).resolve()
+                sub = rr_path.relative_to(reviews_abs).parent.as_posix()
+            except (OSError, RuntimeError, ValueError):
+                sub = "."
+            if sub != ".":
+                target_dir = f"{target_dir}/{sub}"
+        target_path = f"{target_dir}/{stem}{profile.verdict_record_suffix}"
     else:
         return _invalid(
             root,
@@ -3594,7 +3991,10 @@ def _compute_loop_resume(
             "",
         )
         stem = report_name[: -len(profile.review_report_suffix)]
-        verdict_record_rel = f"{reviews_rel}/{stem}{profile.verdict_record_suffix}"
+        # The receipt is expected beside its report, which preserves nested
+        # containment and is identical to the reviews root for flat layouts.
+        report_dir_rel = report_rel.rsplit("/", 1)[0] if "/" in report_rel else reviews_rel
+        verdict_record_rel = f"{report_dir_rel}/{stem}{profile.verdict_record_suffix}"
         return _status(
             LoopResumeStep.RECORD_VERDICT,
             (
@@ -3713,13 +4113,49 @@ def _compute_loop_resume(
             f"{rr_dir}/{stem}_verdict_record.md" if rr_dir else f"{stem}_verdict_record.md"
         )
 
-    # Find matching review prompt (same sequence as coding prompt)
+    # Find the matching review prompt through the one configured pairing
+    # decision (M003-S02): validated workflow metadata under
+    # ``pairing: workflow_metadata``, else the default equal-sequence rule.
     review_prompt_path = ""
     review_seq = coding_artifact.sequence
-    for artifact in prompt_artifacts:
-        if artifact.kind == PromptKind.REVIEW and artifact.sequence == review_seq:
-            review_prompt_path = f"prompts/for_review_agent/{artifact.filename}"
-            break
+    if profile.prompt_pairing == "workflow_metadata":
+        if found_meta.slice_id:
+            paired, pairing_ambiguous = _select_paired_review_prompt(
+                coding_artifact,
+                found_meta.slice_id,
+                prompt_artifacts,
+                root,
+                profile,
+            )
+            if pairing_ambiguous:
+                return _status(
+                    LoopResumeStep.FIX_REVIEW_REPORT,
+                    (
+                        f"ambiguous review-prompt pairing for {frontier_slice_id}: "
+                        "multiple qualifying review prompts; resolve the "
+                        "ambiguity before continuing"
+                    ),
+                    "",
+                    frontier_slice_id=frontier_slice_id,
+                    frontier_slice_title=frontier_slice_title,
+                    coding_prompt_path=coding_prompt_path,
+                    self_report_path=self_report_path,
+                    diagnostics=tuple(
+                        diagnostics
+                        + [
+                            "ambiguous review-prompt pairing: multiple "
+                            "qualifying candidates and no validated "
+                            "disambiguation"
+                        ]
+                    ),
+                )
+            if paired is not None:
+                review_prompt_path = f"{profile.review_prompt_dir}/{paired.filename}"
+    else:
+        for artifact in prompt_artifacts:
+            if artifact.kind == PromptKind.REVIEW and artifact.sequence == review_seq:
+                review_prompt_path = f"prompts/for_review_agent/{artifact.filename}"
+                break
 
     # If metadata is incomplete, we can't locate the self-report deterministically
     if not found_meta.valid or not self_report_path:
@@ -3801,14 +4237,18 @@ def _compute_loop_resume(
 
     # Check for matching review prompt
     if not review_prompt_path:
-        seq_str = f"{review_seq:03d}" if isinstance(review_seq, int) else "???"
+        if profile.prompt_pairing == "workflow_metadata":
+            hint = "python -m frutlups make-review-prompt <project>"
+        else:
+            seq_str = f"{review_seq:03d}" if isinstance(review_seq, int) else "???"
+            hint = f"python -m frutlups make-review-prompt <project> --sequence {seq_str}"
         return _status(
             LoopResumeStep.MAKE_REVIEW_PROMPT,
             (
                 f"self-report for {frontier_slice_id} is valid; "
                 f"no matching review prompt yet; run make-review-prompt"
             ),
-            f"python -m frutlups make-review-prompt <project> --sequence {seq_str}",
+            hint,
             frontier_slice_id=frontier_slice_id,
             frontier_slice_title=frontier_slice_title,
             coding_prompt_path=coding_prompt_path,

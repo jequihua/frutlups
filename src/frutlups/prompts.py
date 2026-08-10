@@ -145,6 +145,9 @@ class PromptInventoryFinding:
 
 def analyze_prompt_inventory(
     artifacts: Iterable[PromptArtifact],
+    *,
+    numbering: str = "per_kind_sequence",
+    pairing: str = "same_sequence",
 ) -> tuple[PromptInventoryFinding, ...]:
     """Analyse ``artifacts`` for numbering gaps, duplicates, and unmatched pairs.
 
@@ -152,7 +155,8 @@ def analyze_prompt_inventory(
     iterable and returns a deterministic tuple of findings. It does not
     touch the filesystem and is not coupled to ``ProjectStatus``.
 
-    Findings are returned in this order:
+    With the default ``per_kind_sequence`` numbering and ``same_sequence``
+    pairing, findings are returned in this order:
 
     1. ``missing_prompt_sequence`` for coding prompts (ascending)
     2. ``missing_prompt_sequence`` for review prompts (ascending)
@@ -160,6 +164,13 @@ def analyze_prompt_inventory(
     4. ``duplicate_prompt_sequence`` for review prompts (ascending)
     5. ``unmatched_coding_prompt`` (ascending)
     6. ``unmatched_review_prompt`` (ascending)
+
+    With ``numbering="global_flat_sequence"`` (M003-S02, owner note 008),
+    gaps and duplicates are computed over the one global sequence shared by
+    both prompt kinds and reported with ``kind=None``. With
+    ``pairing="workflow_metadata"``, no unmatched-pair findings are
+    reported: pairing is decided by validated workflow metadata elsewhere,
+    so equal-sequence absence is ordinary loop state, not a defect.
 
     Within each finding, ``filenames`` is sorted by filename. Artifacts
     with ``sequence is None`` are ignored by every check.
@@ -175,37 +186,58 @@ def analyze_prompt_inventory(
         by_kind_sequence[artifact.kind][artifact.sequence].append(artifact.filename)
 
     findings: list[PromptInventoryFinding] = []
-    findings.extend(_missing_findings(by_kind_sequence[PromptKind.CODING], PromptKind.CODING))
-    findings.extend(_missing_findings(by_kind_sequence[PromptKind.REVIEW], PromptKind.REVIEW))
-    findings.extend(_duplicate_findings(by_kind_sequence[PromptKind.CODING], PromptKind.CODING))
-    findings.extend(_duplicate_findings(by_kind_sequence[PromptKind.REVIEW], PromptKind.REVIEW))
+    if numbering == "global_flat_sequence":
+        global_sequence: dict[int, list[str]] = defaultdict(list)
+        for kind_map in by_kind_sequence.values():
+            for sequence, filenames in kind_map.items():
+                global_sequence[sequence].extend(filenames)
+        findings.extend(_missing_findings(global_sequence, None))
+        findings.extend(_duplicate_findings(global_sequence, None))
+    else:
+        findings.extend(
+            _missing_findings(by_kind_sequence[PromptKind.CODING], PromptKind.CODING)
+        )
+        findings.extend(
+            _missing_findings(by_kind_sequence[PromptKind.REVIEW], PromptKind.REVIEW)
+        )
+        findings.extend(
+            _duplicate_findings(by_kind_sequence[PromptKind.CODING], PromptKind.CODING)
+        )
+        findings.extend(
+            _duplicate_findings(by_kind_sequence[PromptKind.REVIEW], PromptKind.REVIEW)
+        )
 
-    coding_sequences = set(by_kind_sequence[PromptKind.CODING])
-    review_sequences = set(by_kind_sequence[PromptKind.REVIEW])
-    findings.extend(
-        _unmatched_findings(
-            sorted(coding_sequences - review_sequences),
-            by_kind_sequence[PromptKind.CODING],
-            kind=PromptKind.CODING,
-            code="unmatched_coding_prompt",
-            partner_label="review",
+    if pairing == "same_sequence":
+        coding_sequences = set(by_kind_sequence[PromptKind.CODING])
+        review_sequences = set(by_kind_sequence[PromptKind.REVIEW])
+        findings.extend(
+            _unmatched_findings(
+                sorted(coding_sequences - review_sequences),
+                by_kind_sequence[PromptKind.CODING],
+                kind=PromptKind.CODING,
+                code="unmatched_coding_prompt",
+                partner_label="review",
+            )
         )
-    )
-    findings.extend(
-        _unmatched_findings(
-            sorted(review_sequences - coding_sequences),
-            by_kind_sequence[PromptKind.REVIEW],
-            kind=PromptKind.REVIEW,
-            code="unmatched_review_prompt",
-            partner_label="coding",
+        findings.extend(
+            _unmatched_findings(
+                sorted(review_sequences - coding_sequences),
+                by_kind_sequence[PromptKind.REVIEW],
+                kind=PromptKind.REVIEW,
+                code="unmatched_review_prompt",
+                partner_label="coding",
+            )
         )
-    )
     return tuple(findings)
+
+
+def _kind_label(kind: PromptKind | None) -> str:
+    return kind.value if kind is not None else "global"
 
 
 def _missing_findings(
     sequence_to_filenames: dict[int, list[str]],
-    kind: PromptKind,
+    kind: PromptKind | None,
 ) -> list[PromptInventoryFinding]:
     if not sequence_to_filenames:
         return []
@@ -221,7 +253,7 @@ def _missing_findings(
                 sequence=sequence,
                 filenames=(),
                 message=(
-                    f"{kind.value} prompt sequence {sequence:03d} is missing "
+                    f"{_kind_label(kind)} prompt sequence {sequence:03d} is missing "
                     f"between {min(present):03d} and {highest:03d}."
                 ),
             )
@@ -231,7 +263,7 @@ def _missing_findings(
 
 def _duplicate_findings(
     sequence_to_filenames: dict[int, list[str]],
-    kind: PromptKind,
+    kind: PromptKind | None,
 ) -> list[PromptInventoryFinding]:
     findings: list[PromptInventoryFinding] = []
     for sequence in sorted(sequence_to_filenames):
@@ -246,7 +278,7 @@ def _duplicate_findings(
                 sequence=sequence,
                 filenames=sorted_filenames,
                 message=(
-                    f"{kind.value} prompt sequence {sequence:03d} has "
+                    f"{_kind_label(kind)} prompt sequence {sequence:03d} has "
                     f"duplicate filenames: {', '.join(sorted_filenames)}."
                 ),
             )
@@ -466,6 +498,9 @@ class PromptHealth:
 
 def compute_prompt_health(
     artifacts: Iterable[PromptArtifact],
+    *,
+    numbering: str = "per_kind_sequence",
+    pairing: str = "same_sequence",
 ) -> PromptHealth:
     """Compute prompt health from the existing M003 helper pipeline.
 
@@ -477,9 +512,13 @@ def compute_prompt_health(
        (M003-S02)
     4. wrap each finding with the documented severity mapping
 
-    Pairing is by parsed sequence number only. Any unmatched coding or
-    review prompt sequence, including the highest one, is a warning
-    that flips ``ok`` to ``False``.
+    Under the default modes, pairing is by parsed sequence number only and
+    any unmatched coding or review prompt sequence, including the highest
+    one, is a warning that flips ``ok`` to ``False``. The configured
+    ``numbering``/``pairing`` modes (M003-S02, owner note 008) change only
+    what :func:`analyze_prompt_inventory` reports; the health surface
+    describes the configured convention instead of false per-kind gaps or
+    unmatched pairs.
     """
 
     artifacts_tuple = tuple(artifacts)
@@ -494,7 +533,9 @@ def compute_prompt_health(
     analyzed = total - ignored
 
     filtered = filter_prompt_artifacts_for_analysis(artifacts_tuple)
-    raw_findings = analyze_prompt_inventory(filtered)
+    raw_findings = analyze_prompt_inventory(
+        filtered, numbering=numbering, pairing=pairing
+    )
     findings = tuple(
         PromptHealthFinding(
             severity=_PROMPT_FINDING_SEVERITY.get(raw.code, PromptHealthSeverity.WARNING),

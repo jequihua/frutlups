@@ -26,6 +26,14 @@ No OKF/profile result may decide native prompt or report validity, pairing, acce
 gate state, execution, or write permission. Default `status`, `next`, `orchestrator-plan`, and
 always-emitted JSON remain unchanged unless a later reviewed opt-in surface says otherwise.
 
+The committed layout config carries two reviewed opt-in closed vocabularies:
+`reports.discovery` (`flat` | `recursive_contained`) and `prompts.pairing`
+(`same_sequence` | `workflow_metadata`, designed for configs that also declare
+`prompts.numbering: global_flat_sequence`). Absent keys preserve the exact
+historical behavior; unknown values for the new keys are ERROR diagnostics that
+fall back to the default rather than changing pairing or evidence semantics.
+See `README.md` for their behavior.
+
 ## References
 
 See `README.md` for the current package and usage surface. The complete numbered
