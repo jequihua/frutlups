@@ -10,7 +10,7 @@ boundary summary, not a second API source.
 
 ## Preserved Public Surface
 
-- Distribution and import name `frutlups`, version `0.1.0`, and Python `>=3.11`.
+- Distribution and import name `frutlups`, version `0.1.1`, and Python `>=3.11`.
 - The `frutlups` console entry point and eight top-level CLI verbs.
 - The package `__all__` export set and every resolving public name.
 - Documented dataclass and JSON shapes, including default text and JSON behavior.

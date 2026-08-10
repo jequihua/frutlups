@@ -2580,8 +2580,9 @@ def _select_paired_review_prompt(
         return explicit[0][0], False
     if explicit:
         candidates = explicit
-    if all(pair[1].round_value is not None for pair in candidates):
-        highest = max(pair[1].round_value for pair in candidates)
+    round_values = tuple(pair[1].round_value for pair in candidates)
+    if all(value is not None for value in round_values):
+        highest = max(value for value in round_values if value is not None)
         top = [pair for pair in candidates if pair[1].round_value == highest]
         if len(top) == 1:
             return top[0][0], False
