@@ -471,6 +471,7 @@ class CodingPromptRenderResult:
 def render_coding_prompt(
     template: CodingPromptTemplate,
     snippet: MemoryPromptSnippet | None = None,
+    posture_path: str | None = None,
 ) -> CodingPromptRenderResult:
     """Render a deterministic coding-prompt markdown body for ``template``.
 
@@ -484,6 +485,12 @@ def render_coding_prompt(
     Returns a :class:`CodingPromptRenderResult`. When the template
     cannot produce usable content, ``content`` is ``""`` and
     ``errors`` contains the deterministic error messages.
+
+    ``posture_path`` (M011-S01) selects the memory operating/posture file cited
+    in the ``## llloom Integration Posture`` section. When ``None`` (the public
+    default) the historical ``05_governance/llloom_operating_model.md`` is used,
+    so the direct public-call bytes are unchanged; project composition passes the
+    selected non-legacy profile's posture path instead.
     """
 
     errors: list[str] = list(validate_coding_prompt_template(template))
@@ -501,7 +508,7 @@ def render_coding_prompt(
             errors=tuple(errors),
         )
 
-    content = _render_markdown(template, snippet=snippet)
+    content = _render_markdown(template, snippet=snippet, posture_path=posture_path)
     return CodingPromptRenderResult(
         content=content,
         valid=True,
@@ -509,10 +516,15 @@ def render_coding_prompt(
     )
 
 
+_DEFAULT_LEGACY_POSTURE_PATH = "05_governance/llloom_operating_model.md"
+
+
 def _render_markdown(
     template: CodingPromptTemplate,
     snippet: MemoryPromptSnippet | None = None,
+    posture_path: str | None = None,
 ) -> str:
+    posture = posture_path if posture_path else _DEFAULT_LEGACY_POSTURE_PATH
     sequence_text = format_prompt_sequence(template.sequence)
     review_filename = (
         f"{sequence_text}_review_{template.slug}.md" if sequence_text and template.slug else ""
@@ -631,7 +643,7 @@ def _render_markdown(
             "Repository artifacts remain authoritative over memory; memory "
             "updates must not contradict or replace primary source artifacts. "
             "Read the current instructions in "
-            "`05_governance/llloom_operating_model.md` before planning any "
+            f"`{posture}` before planning any "
             "mutating command. Isolate all command construction behind "
             "patchable interfaces and require a passing review before "
             "applying seed manifests or other mutating operations."
@@ -639,7 +651,7 @@ def _render_markdown(
     else:
         lines.append(
             "Follow the current project memory instructions defined in "
-            "`05_governance/llloom_operating_model.md`. Do not mutate "
+            f"`{posture}`. Do not mutate "
             "`llloom` workspaces during normal coding or review slices. "
             "If memory integration is required, isolate command "
             "construction behind small patchable interfaces and check "

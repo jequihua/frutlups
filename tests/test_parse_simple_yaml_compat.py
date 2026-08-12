@@ -64,7 +64,7 @@ class PublicSurfaceTests(unittest.TestCase):
         self.assertIs(frutlups.parse_simple_yaml, parse_simple_yaml)
         signature = inspect.signature(parse_simple_yaml)
         self.assertEqual(list(signature.parameters), ["text"])
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
 
     def test_old_engine_helpers_are_gone(self) -> None:
         for name in ("_strip_inline_comment", "_scalar", "parse_block"):

@@ -10,7 +10,7 @@ boundary summary, not a second API source.
 
 ## Preserved Public Surface
 
-- Distribution and import name `frutlups`, version `0.1.1`, and Python `>=3.11`.
+- Distribution and import name `frutlups`, version `0.1.2`, and Python `>=3.11`.
 - The `frutlups` console entry point and eight top-level CLI verbs.
 - The package `__all__` export set and every resolving public name.
 - Documented dataclass and JSON shapes, including default text and JSON behavior.
@@ -23,8 +23,16 @@ constants here.
 ## Compatibility And Authority
 
 No OKF/profile result may decide native prompt or report validity, pairing, acceptance, frontier,
-gate state, execution, or write permission. Default `status`, `next`, `orchestrator-plan`, and
-always-emitted JSON remain unchanged unless a later reviewed opt-in surface says otherwise.
+gate state, execution, or write permission.
+
+The 0.1.2 status contract adds exactly one top-level `memory_mode` sibling. It has
+contract id `frutlups.memory_mode`, version `"1"`, and the exact fields
+`contract_id`, `contract_version`, `valid`, `mode`, `memory_root`, and
+`diagnostics`. It reports the declaration, never backend availability. Missing
+declarations map compatibly to valid mode `none`; malformed or ambiguous
+declarations return `valid: false`, `mode: null`, and fixed diagnostic codes.
+The existing `memory` health block remains separate. `planning_frontier` version
+`"1"`, `loop_resume`, all eight verbs, and non-status command shapes are unchanged.
 
 The committed layout config carries two reviewed opt-in closed vocabularies:
 `reports.discovery` (`flat` | `recursive_contained`) and `prompts.pairing`

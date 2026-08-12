@@ -105,6 +105,26 @@ class TemplatePaths:
 
     @property
     def default_memory_root(self) -> Path:
+        # M011-S01: profile-aware. When a layout profile is selected, its
+        # ``llloom_memory_root`` (v2/template-v3 -> repo-root ``llloom_memory``;
+        # legacy -> ``07_app/llloom_memory``) supplies the root so this no longer
+        # contradicts a selected v2/template-v3 profile. With no profile (legacy
+        # direct construction) the historical location is preserved unchanged.
+        #
+        # Prompt 044 Gate D: a selected profile carrying the explicit unsafe-root
+        # disable sentinel (``llloom_memory_root == ""``) must fail closed rather
+        # than return the historical legacy root, the project root, or any other
+        # usable fallback. The property has no live product consumer, so an
+        # invalid interpretation is surfaced as a bounded, non-echoing
+        # ``ValueError`` that preserves the property and every valid return type.
+        if self.profile is not None:
+            rel = self.profile.llloom_memory_root
+            if rel == "":
+                raise ValueError(
+                    "selected layout profile disabled the llloom memory root; "
+                    "no default memory root is available"
+                )
+            return _rel(self.root, rel)
         return self.root / "07_app" / "llloom_memory"
 
     @property

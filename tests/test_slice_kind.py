@@ -1,21 +1,21 @@
-"""Tests for M010-S01: memory-update slice type.
+"""Tests for the slice-kind classification contract.
 
-Covers:
-- SliceKind enum values are stable strings
-- classify_slice_kind() returns NORMAL for all non-M010 milestones
-- classify_slice_kind() returns MEMORY_UPDATE for M010
-- LoopFrontier.slice_kind property returns correct kind from inferred_slice
-- LoopFrontier.to_dict() includes "slice_kind" key as a plain string
+Originally introduced for M010-S01. M011-S01 removed the milestone-identity
+memory-update leak, so the pinned contract is now:
+
+- SliceKind enum values are stable strings (both members retained)
+- classify_slice_kind() returns NORMAL for every milestone, including M010 and
+  its case variants (no identifier grants MEMORY_UPDATE by inference)
+- LoopFrontier.slice_kind property returns NORMAL for an M010 frontier
+- LoopFrontier.to_dict() includes "slice_kind" key as a plain string ("normal")
 - CodingPromptTemplate.memory_update field defaults to False
 - CodingPromptTemplate.to_dict() includes "memory_update"
-- render_coding_prompt() with memory_update=True produces memory-update posture
-- render_coding_prompt() with memory_update=False produces normal posture
-- memory-update prompt text is explicit: mutation allowed, review required,
-  artifacts authoritative
-- build_coding_prompt_plan() for M010-S01 frontier sets memory_update=True
-- build_coding_prompt_plan() for non-M010 frontiers sets memory_update=False
+- render_coding_prompt() with memory_update=True (set directly on the template)
+  still produces memory-update posture; with False, normal posture
+- build_coding_prompt_plan() for an M010 frontier sets memory_update=False and
+  the generated prompt omits memory-mutation posture
 - projects without memory roots still work normally
-- existing M009 tests remain green (checked by full suite)
+- existing tests remain green (checked by full suite)
 """
 
 from __future__ import annotations
@@ -108,11 +108,13 @@ class SliceKindEnumTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class ClassifySliceKindTests(unittest.TestCase):
-    def test_m010_is_memory_update(self) -> None:
-        self.assertEqual(classify_slice_kind("M010"), SliceKind.MEMORY_UPDATE)
+    def test_m010_is_normal(self) -> None:
+        # M011-S01: milestone identity no longer confers memory-update authority.
+        self.assertEqual(classify_slice_kind("M010"), SliceKind.NORMAL)
 
-    def test_m010_lowercase_is_memory_update(self) -> None:
-        self.assertEqual(classify_slice_kind("m010"), SliceKind.MEMORY_UPDATE)
+    def test_m010_lowercase_is_normal(self) -> None:
+        # M011-S01: case variants of M010 are also NORMAL (no identifier leak).
+        self.assertEqual(classify_slice_kind("m010"), SliceKind.NORMAL)
 
     def test_m001_is_normal(self) -> None:
         self.assertEqual(classify_slice_kind("M001"), SliceKind.NORMAL)
@@ -154,9 +156,10 @@ class LoopFrontierSliceKindTests(unittest.TestCase):
         # Either way, kind should not be MEMORY_UPDATE
         self.assertEqual(frontier.slice_kind, SliceKind.NORMAL)
 
-    def test_slice_kind_memory_update_for_m010_frontier(self) -> None:
+    def test_slice_kind_normal_for_m010_frontier(self) -> None:
+        # M011-S01: an ordinary M010 frontier classifies NORMAL, not memory_update.
         frontier = self._frontier(m010=True)
-        self.assertEqual(frontier.slice_kind, SliceKind.MEMORY_UPDATE)
+        self.assertEqual(frontier.slice_kind, SliceKind.NORMAL)
 
     def test_to_dict_includes_slice_kind(self) -> None:
         frontier = self._frontier(m010=True)
@@ -168,10 +171,11 @@ class LoopFrontierSliceKindTests(unittest.TestCase):
         d = frontier.to_dict()
         self.assertIsInstance(d["slice_kind"], str)
 
-    def test_to_dict_slice_kind_memory_update_value(self) -> None:
+    def test_to_dict_slice_kind_normal_value_for_m010(self) -> None:
+        # M011-S01: generated frontier JSON reflects "normal" for a downstream M010.
         frontier = self._frontier(m010=True)
         d = frontier.to_dict()
-        self.assertEqual(d["slice_kind"], "memory_update")
+        self.assertEqual(d["slice_kind"], "normal")
 
     def test_to_dict_slice_kind_normal_value_without_m010(self) -> None:
         frontier = self._frontier(m010=False)
@@ -255,11 +259,12 @@ class CodingPromptPlanMemoryUpdateTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._td.cleanup()
 
-    def test_m010_frontier_sets_memory_update_true(self) -> None:
+    def test_m010_frontier_sets_memory_update_false(self) -> None:
+        # M011-S01: an M010 frontier no longer grants memory-update posture.
         _write_roadmaps(self.root, m010=True)
         plan = build_coding_prompt_plan(self.root)
         self.assertIsNotNone(plan.template)
-        self.assertTrue(plan.template.memory_update)
+        self.assertFalse(plan.template.memory_update)
 
     def test_normal_frontier_sets_memory_update_false(self) -> None:
         # Rewrite roadmaps without M010 so frontier is a normal slice
@@ -272,11 +277,13 @@ class CodingPromptPlanMemoryUpdateTests(unittest.TestCase):
         if plan.valid and plan.template is not None:
             self.assertFalse(plan.template.memory_update)
 
-    def test_m010_render_includes_memory_update_posture(self) -> None:
+    def test_m010_render_omits_memory_update_posture(self) -> None:
+        # M011-S01: the generated prompt for an M010 frontier must not grant
+        # memory-mutation posture merely because its milestone is M010.
         _write_roadmaps(self.root, m010=True)
         plan = build_coding_prompt_plan(self.root)
         self.assertIsNotNone(plan.render)
-        self.assertIn("memory-update", plan.render.content.lower())
+        self.assertNotIn("memory mutation is permitted", plan.render.content.lower())
 
     def test_plan_valid_for_m010_frontier(self) -> None:
         _write_roadmaps(self.root, m010=True)

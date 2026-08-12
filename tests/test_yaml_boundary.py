@@ -779,7 +779,7 @@ class BoundaryIsolationTests(_BoundaryTestCase):
     def test_the_boundary_is_private_and_not_re_exported(self) -> None:
         import frutlups
 
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         self.assertNotIn("_yaml", frutlups.__all__)
         for name in _yaml.__all__:
             with self.subTest(name=name):

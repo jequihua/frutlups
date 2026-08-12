@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, replace
+import stat
+from dataclasses import dataclass, field as dataclass_field, replace
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
@@ -28,12 +29,15 @@ from frutlups.layout import (
     legacy_profile,
     load_layout_profile,
     normalize_section,
+    resolve_under_root,
 )
 from frutlups.memory import (
+    DisabledMemoryBackend,
     MemoryCommandRunner,
     MemoryStatus,
     build_memory_prompt_snippet,
     detect_memory,
+    observe_llloom_memory_root,
 )
 from frutlups.prompt_template import (
     MAX_PROMPT_SEQUENCE,
@@ -163,6 +167,55 @@ class ProjectLayout:
         )
 
 
+MEMORY_MODE_CONTRACT_ID = "frutlups.memory_mode"
+MEMORY_MODE_CONTRACT_VERSION = "1"
+MEMORY_MODE_SUPPORTED_VERSIONS = (MEMORY_MODE_CONTRACT_VERSION,)
+_MEMORY_MODE_VALUES = frozenset({"none", "lightweight", "llloom"})
+
+
+@dataclass(frozen=True)
+class MemoryModeStatus:
+    """Versioned declaration fact for external read-only runners.
+
+    ``mode`` is the selected project's declaration, not a backend-availability
+    inference. ``memory_root`` is the safe repository-relative reference declared
+    for ``llloom`` mode; it is never an absolute resolved machine path. A malformed
+    declaration has ``valid=False`` and ``mode=None`` so consumers can refuse
+    without guessing. Missing declarations preserve compatibility as valid
+    ``none``.
+    """
+
+    contract_id: str
+    contract_version: str
+    valid: bool
+    mode: str | None
+    memory_root: str | None
+    diagnostics: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "contract_id": self.contract_id,
+            "contract_version": self.contract_version,
+            "valid": self.valid,
+            "mode": self.mode,
+            "memory_root": self.memory_root,
+            "diagnostics": list(self.diagnostics),
+        }
+
+
+def _default_memory_mode_status() -> MemoryModeStatus:
+    """Compatibility default for direct legacy ``ProjectStatus`` construction."""
+
+    return MemoryModeStatus(
+        contract_id=MEMORY_MODE_CONTRACT_ID,
+        contract_version=MEMORY_MODE_CONTRACT_VERSION,
+        valid=True,
+        mode="none",
+        memory_root=None,
+        diagnostics=(),
+    )
+
+
 @dataclass(frozen=True)
 class ProjectStatus:
     """Read-only status for a frutlups-style project."""
@@ -182,6 +235,9 @@ class ProjectStatus:
     memory: MemoryStatus
     diagnostics: tuple[Diagnostic, ...]
     layout: LoadedLayout | None = None
+    memory_mode: MemoryModeStatus = dataclass_field(
+        default_factory=_default_memory_mode_status
+    )
 
     @property
     def ok(self) -> bool:
@@ -205,6 +261,7 @@ class ProjectStatus:
             "prompt_artifacts": [artifact.to_dict() for artifact in self.prompt_artifacts],
             "prompt_health": self.prompt_health.to_dict(),
             "memory": self.memory.to_dict(),
+            "memory_mode": self.memory_mode.to_dict(),
             "diagnostics": [diag.to_dict() for diag in self.diagnostics],
             "layout": self.layout.to_dict() if self.layout is not None else None,
         }
@@ -446,12 +503,18 @@ _LAYOUT_SEVERITY_MAP: dict[LayoutDiagnosticSeverity, DiagnosticSeverity] = {
 }
 
 
-def _layout_status_diagnostics(layout: ProjectLayout) -> list[Diagnostic]:
+def _layout_status_diagnostics(
+    layout: ProjectLayout, state_obs: _StateObservation
+) -> list[Diagnostic]:
     """Surface layout/profile config issues and v2 state checks as diagnostics.
 
     Includes config-load diagnostics (schema-version and unsafe-path warnings),
     missing required directories under the selected profile, and v2
     ``PROJECT_STATE.md`` presence and controlled-mode-field violations.
+
+    ``state_obs`` is the single selected read of the profile's state file
+    (M011-S01): this function consults it rather than reading the file again, so
+    diagnostics and memory selection share one file read and one parse.
     """
 
     diagnostics: list[Diagnostic] = []
@@ -485,8 +548,7 @@ def _layout_status_diagnostics(layout: ProjectLayout) -> list[Diagnostic]:
         )
 
     if profile.state_file:
-        state_path = layout.root / profile.state_file
-        if not state_path.is_file():
+        if not state_obs.present:
             diagnostics.append(
                 Diagnostic(
                     code="layout_state_file_missing",
@@ -497,8 +559,16 @@ def _layout_status_diagnostics(layout: ProjectLayout) -> list[Diagnostic]:
                     ),
                 )
             )
+        elif not state_obs.readable:
+            diagnostics.append(
+                Diagnostic(
+                    code="layout_state_file_unreadable",
+                    severity=DiagnosticSeverity.WARNING,
+                    message=f"could not read state file {profile.state_file!r}: {state_obs.error}",
+                )
+            )
         else:
-            diagnostics.extend(_state_mode_diagnostics(state_path, profile))
+            diagnostics.extend(_state_mode_diagnostics(state_obs, profile))
 
     return diagnostics
 
@@ -560,24 +630,166 @@ def _layout_fallback_label_message(blockers: tuple[LayoutDiagnostic, ...]) -> st
     )
 
 
-def _state_mode_diagnostics(state_path: Path, profile: LayoutProfile) -> list[Diagnostic]:
-    """Check controlled mode fields in a v2 PROJECT_STATE.md against the profile."""
+@dataclass(frozen=True)
+class _StateObservation:
+    """One selected read+parse of the profile's state file (M011-S01).
+
+    Built at most once per composition and shared between the state-mode
+    diagnostics and the mode-aware memory selection so a single invocation reads
+    and parses ``PROJECT_STATE.md`` exactly once. ``configured`` is True when the
+    selected profile declares a ``state_file``; ``present``/``readable`` describe
+    that file; ``values`` maps ``lower(label) -> value`` for the controlled mode
+    lines; ``error`` carries a bounded OS-error string for the unreadable case.
+    A profile with no state contract (legacy fallback) yields
+    ``configured=False`` and consults no file.
+    """
+
+    configured: bool
+    present: bool
+    readable: bool
+    values: dict[str, str]
+    counts: dict[str, int]
+    error: str = ""
+
+
+_STATE_FILE_MAX_BYTES = 262_144
+_STATE_OPEN_FLAGS = (
+    os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
+)
+
+
+class _StateReadError(Exception):
+    """Owned internal refusal from the bounded state-file reader."""
+
+
+def _unreadable_state_observation(message: str) -> _StateObservation:
+    """One owned failure value for a configured state path."""
+
+    return _StateObservation(
+        configured=True,
+        present=True,
+        readable=False,
+        values={},
+        counts={},
+        error=message,
+    )
+
+
+def _read_state_file_once(path: Path) -> str:
+    """Open one regular file once and return at most the bounded UTF-8 text."""
+
+    try:
+        before = os.stat(path)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > _STATE_FILE_MAX_BYTES:
+            raise _StateReadError
+        descriptor = os.open(path, _STATE_OPEN_FLAGS)
+    except (OSError, ValueError):
+        raise _StateReadError from None
+
+    handle = None
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            stat.S_ISREG(opened.st_mode)
+            and opened.st_size <= _STATE_FILE_MAX_BYTES
+            and (opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino)
+        ):
+            handle = os.fdopen(descriptor, "rb")
+    except (OSError, ValueError):
+        pass
+    finally:
+        if handle is None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+    if handle is None:
+        raise _StateReadError
+
+    try:
+        with handle:
+            data = handle.read(_STATE_FILE_MAX_BYTES + 1)
+    except (OSError, ValueError):
+        raise _StateReadError from None
+    if len(data) > _STATE_FILE_MAX_BYTES:
+        raise _StateReadError
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise _StateReadError from None
+
+
+def _observe_state(root: Path, profile: LayoutProfile) -> _StateObservation:
+    """Read one bounded, contained, regular UTF-8 state-file snapshot."""
+
+    if not profile.state_file:
+        return _StateObservation(
+            configured=False, present=False, readable=False, values={}, counts={}
+        )
+    try:
+        state_path = resolve_under_root(root, profile.state_file)
+    except ValueError:
+        return _unreadable_state_observation("state file path is unsafe")
+
+    try:
+        exists = state_path.exists()
+        link_like = state_path.is_symlink()
+    except (OSError, RuntimeError):
+        return _unreadable_state_observation("state file could not be observed")
+    if not exists and not link_like:
+        return _StateObservation(
+            configured=True, present=False, readable=False, values={}, counts={}
+        )
+    if not exists:
+        return _unreadable_state_observation("state file target is unavailable")
+
+    try:
+        root_real = root.resolve(strict=True)
+        state_real = state_path.resolve(strict=True)
+        state_real.relative_to(root_real)
+    except (OSError, RuntimeError, ValueError):
+        return _unreadable_state_observation("state file could not be opened safely")
+
+    try:
+        text = _read_state_file_once(state_real)
+    except _StateReadError:
+        return _unreadable_state_observation("state file could not be read safely")
+
+    values, counts = _parse_state_mode_entries(text)
+    return _StateObservation(
+        configured=True,
+        present=True,
+        readable=True,
+        values=values,
+        counts=counts,
+    )
+
+
+def _state_mode_diagnostics(
+    state_obs: _StateObservation, profile: LayoutProfile
+) -> list[Diagnostic]:
+    """Check controlled mode fields in a v2 PROJECT_STATE.md against the profile.
+
+    Consumes the single selected :class:`_StateObservation` (M011-S01); it does
+    not read the state file again.
+    """
 
     diagnostics: list[Diagnostic] = []
-    try:
-        text = state_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return [
-            Diagnostic(
-                code="layout_state_file_unreadable",
-                severity=DiagnosticSeverity.WARNING,
-                message=f"could not read state file {profile.state_file!r}: {exc}",
-            )
-        ]
-
-    values = _parse_state_mode_values(text)
+    values = state_obs.values
     for mode in profile.mode_fields:
         label = mode.label.lower()
+        if state_obs.counts.get(label, 0) > 1:
+            diagnostics.append(
+                Diagnostic(
+                    code="layout_state_mode_duplicate",
+                    severity=DiagnosticSeverity.WARNING,
+                    message=(
+                        f"state file repeats controlled mode field {mode.label!r}; "
+                        "the declaration is ambiguous"
+                    ),
+                )
+            )
+            continue
         if label not in values:
             diagnostics.append(
                 Diagnostic(
@@ -609,7 +821,15 @@ def _parse_state_mode_values(text: str) -> dict[str, str]:
     the v2 list form (``Memory mode:`` on one line, ``- none`` on the next).
     """
 
+    values, _counts = _parse_state_mode_entries(text)
+    return values
+
+
+def _parse_state_mode_entries(text: str) -> tuple[dict[str, str], dict[str, int]]:
+    """Return normalized values and occurrence counts from one state snapshot."""
+
     values: dict[str, str] = {}
+    counts: dict[str, int] = {}
     lines = text.splitlines()
     for idx, line in enumerate(lines):
         stripped = line.strip()
@@ -617,6 +837,7 @@ def _parse_state_mode_values(text: str) -> dict[str, str]:
             continue
         label, _, rest = stripped.partition(":")
         label = label.strip().lower().lstrip("-* ").strip()
+        counts[label] = counts.get(label, 0) + 1
         rest = rest.strip()
         if rest:
             values[label] = rest
@@ -629,7 +850,221 @@ def _parse_state_mode_values(text: str) -> dict[str, str]:
             if fstrip.startswith(("-", "*")):
                 values[label] = fstrip.lstrip("-* ").strip()
             break
-    return values
+    return values, counts
+
+
+def _invalid_memory_mode_status(code: str) -> MemoryModeStatus:
+    """Return one bounded fail-closed declaration observation."""
+
+    return MemoryModeStatus(
+        contract_id=MEMORY_MODE_CONTRACT_ID,
+        contract_version=MEMORY_MODE_CONTRACT_VERSION,
+        valid=False,
+        mode=None,
+        memory_root=None,
+        diagnostics=(code,),
+    )
+
+
+def _memory_mode_status(
+    loaded: LoadedLayout,
+    state_obs: _StateObservation,
+) -> MemoryModeStatus:
+    """Derive the external declaration contract from one selected snapshot."""
+
+    if any(diag.code == "config_unreadable" for diag in loaded.diagnostics):
+        return _invalid_memory_mode_status("layout_unreadable")
+
+    profile = loaded.profile
+    memory_field = next((field for field in profile.mode_fields if field.key == "memory"), None)
+    mode: str | None
+    if loaded.source == ProfileSource.LEGACY_FALLBACK or memory_field is None:
+        mode = "none"
+    elif state_obs.error:
+        return _invalid_memory_mode_status("state_unreadable")
+    elif not state_obs.present:
+        mode = "none"
+    else:
+        label = memory_field.label.lower()
+        count = state_obs.counts.get(label, 0)
+        if count == 0:
+            mode = "none"
+        elif count != 1:
+            return _invalid_memory_mode_status("duplicate_memory_mode")
+        else:
+            mode = state_obs.values.get(label)
+            if (
+                mode not in _MEMORY_MODE_VALUES
+                or (memory_field.allowed_values and mode not in memory_field.allowed_values)
+            ):
+                return _invalid_memory_mode_status("invalid_memory_mode")
+
+    memory_root: str | None = None
+    if mode == "llloom":
+        if not profile.llloom_memory_root or any(
+            diag.code == "unsafe_memory_root" for diag in loaded.diagnostics
+        ):
+            return _invalid_memory_mode_status("invalid_memory_root")
+        memory_root = profile.llloom_memory_root
+
+    return MemoryModeStatus(
+        contract_id=MEMORY_MODE_CONTRACT_ID,
+        contract_version=MEMORY_MODE_CONTRACT_VERSION,
+        valid=True,
+        mode=mode,
+        memory_root=memory_root,
+        diagnostics=(),
+    )
+
+
+def build_memory_mode_status(
+    start: Path | str = ".",
+    layout_config: Path | str | None = None,
+) -> MemoryModeStatus:
+    """Read the versioned memory declaration without probing a memory backend."""
+
+    layout = ProjectLayout.discover(start, layout_config=layout_config)
+    observation = _observe_state(layout.root, layout.loaded.profile)
+    return _memory_mode_status(layout.loaded, observation)
+
+
+# ---------------------------------------------------------------------------
+# M011-S01: mode-aware selected-snapshot memory observation (D1)
+# ---------------------------------------------------------------------------
+
+_LIGHTWEIGHT_MEMORY_MESSAGE = (
+    "lightweight project-managed memory posture; no llloom runner"
+)
+_LLLOOM_UNAVAILABLE_DIAGNOSTIC = (
+    "configured llloom memory root is unavailable; memory disabled"
+)
+
+
+def _select_memory_status(
+    root: Path,
+    loaded: LoadedLayout | None,
+    state_obs: _StateObservation,
+    runner: MemoryCommandRunner | None,
+) -> MemoryStatus:
+    """Return the memory observation for the selected layout and state (M011-S01).
+
+    Authority order, per the M011-S01 mode-aware Option B+ decision:
+
+    1. the already-selected state mode decides whether memory is active;
+    2. the already-selected typed layout supplies the safe repo-relative root
+       and posture artifacts;
+    3. filesystem observation only *confirms availability* for an already-active
+       ``llloom`` mode — it never activates a mode by itself; and
+    4. posture markdown is never parsed as a second state store.
+
+    Genuine legacy fallback (no state contract) preserves the historical
+    :func:`detect_memory` root sniff. The compatibility wrapper is never called
+    blindly for a selected v2/template-v3 profile.
+    """
+
+    profile = loaded.profile if loaded is not None else legacy_profile()
+    source = loaded.source if loaded is not None else None
+
+    if source == ProfileSource.LEGACY_FALLBACK or not profile.state_file:
+        # Genuine legacy fallback / no declared state contract: preserve the
+        # historical direct-wrapper root-sniff compatibility behavior.
+        return detect_memory(root, runner=runner)
+
+    memory_field = next((m for m in profile.mode_fields if m.key == "memory"), None)
+    if memory_field is None:
+        return DisabledMemoryBackend().status()
+    allowed = memory_field.allowed_values
+    label = memory_field.label.lower()
+    if not state_obs.readable or state_obs.counts.get(label, 0) != 1:
+        return DisabledMemoryBackend().status()
+    mode = state_obs.values.get(label)
+
+    if mode is None or (allowed and mode not in allowed):
+        # Missing or invalid controlled memory mode: no backend execution. The
+        # state warning is preserved separately via _state_mode_diagnostics; the
+        # memory block is a deterministic disabled observation (byte-identical to
+        # the historical disabled block, so default output is unchanged).
+        return DisabledMemoryBackend().status()
+
+    if mode == "none":
+        # Disabled; ignore all memory directories; runner unreachable.
+        return DisabledMemoryBackend().status()
+
+    if mode == "lightweight":
+        # Active project-managed lightweight posture; no llloom runner call.
+        return MemoryStatus(
+            enabled=True,
+            backend="lightweight",
+            root=None,
+            message=_LIGHTWEIGHT_MEMORY_MESSAGE,
+            diagnostics=(),
+        )
+
+    if mode == "llloom":
+        return _select_llloom_memory_status(root, profile, runner)
+
+    return DisabledMemoryBackend().status()
+
+
+def _select_llloom_memory_status(
+    root: Path,
+    profile: LayoutProfile,
+    runner: MemoryCommandRunner | None,
+) -> MemoryStatus:
+    """Observe the selected ``llloom`` memory root, confirming safe containment.
+
+    Uses the existing path-safety/containment primitives. An absolute, escaping,
+    empty-after-normalization, unresolvable, non-directory, or resolved
+    link/junction-escaping root disables the observation with one bounded owned
+    diagnostic and leaves the runner unreachable; it never silently falls back to
+    a different root. The diagnostic never echoes the configured value.
+    """
+
+    unavailable = MemoryStatus(
+        enabled=False,
+        backend="llloom",
+        root=None,
+        message="",
+        diagnostics=(_LLLOOM_UNAVAILABLE_DIAGNOSTIC,),
+    )
+
+    rel = profile.llloom_memory_root
+    if not rel:
+        # Empty sentinel: an explicitly-configured unsafe root was normalized to
+        # "disable without fallback" at profile-load time.
+        return unavailable
+
+    try:
+        resolved = resolve_under_root(root, rel)
+    except ValueError:
+        return unavailable
+
+    # M011-S01 (Prompt 044 Gate B): contain every documented data-induced
+    # resolution failure at this boundary. ``Path.resolve`` and ``Path.is_dir``
+    # can raise ``OSError`` (e.g. a broken configured target) or ``RuntimeError``
+    # (e.g. an infinite symlink loop); both must fail closed to the owned
+    # unavailable observation with the runner unreachable. The except set is the
+    # documented resolver-failure domain only — a broad ``except Exception`` is
+    # deliberately avoided so genuine programming errors still surface.
+    try:
+        real = resolved.resolve()
+        root_real = root.resolve()
+        is_dir = resolved.is_dir()
+    except (OSError, RuntimeError):
+        return unavailable
+
+    if not is_dir:
+        return unavailable
+
+    # Reject a resolved symlink/junction that escapes the project root. A
+    # non-containment is a ``ValueError`` from ``relative_to`` (a control-flow
+    # signal here, not an error condition).
+    try:
+        real.relative_to(root_real)
+    except ValueError:
+        return unavailable
+
+    return observe_llloom_memory_root(resolved, runner)
 
 
 def build_status(
@@ -677,8 +1112,12 @@ def _build_status_with_evidence(
 
     layout = ProjectLayout.discover(start, layout_config=layout_config)
     paths = layout.paths
+    # M011-S01: one selected read+parse of the state file, shared between the
+    # state-mode diagnostics and the mode-aware memory selection below.
+    state_profile = layout.loaded.profile if layout.loaded is not None else legacy_profile()
+    state_obs = _observe_state(layout.root, state_profile)
     diagnostics: list[Diagnostic] = []
-    diagnostics.extend(_layout_status_diagnostics(layout))
+    diagnostics.extend(_layout_status_diagnostics(layout, state_obs))
 
     active_candidates = paths.active_roadmaps
     active_roadmap = _select_active_roadmap(active_candidates)
@@ -823,7 +1262,10 @@ def _build_status_with_evidence(
                 else "same_sequence"
             ),
         ),
-        memory=detect_memory(layout.root, runner=memory_runner),
+        memory=_select_memory_status(
+            layout.root, layout.loaded, state_obs, memory_runner
+        ),
+        memory_mode=_memory_mode_status(layout.loaded, state_obs),
         diagnostics=tuple(diagnostics),
         layout=layout.loaded,
     )
@@ -1112,18 +1554,40 @@ def _build_coding_prompt_plan_from_status(
         memory_update=is_memory_update,
     )
 
-    snippet = build_memory_prompt_snippet(
-        root=status.root,
-        query=f"{slice_id} {title}",
-        runner=memory_runner,
-    )
     if profile.coding_template:
         # M003-S03: a selected profile with a configured template path must
         # render through that scaffold; the hard-coded renderer is never a
-        # silent fallback.
+        # silent fallback. M011-S01 (D3): the configured path performs no memory
+        # query. Instead, when the selected memory mode is lightweight/llloom the
+        # selected posture file is routed into Read First exactly once, with
+        # deterministic order and exact raw-value de-duplication; no raw memory
+        # command output is ever inserted.
+        posture_reading = _configured_posture_reading(status, profile)
+        if posture_reading:
+            template = replace(
+                template,
+                required_reading=_dedup_append(template.required_reading, posture_reading),
+            )
         render = _render_coding_from_scaffold(status, profile, template)
     else:
-        render = render_coding_prompt(template, snippet=snippet if snippet.has_content else None)
+        # Genuine legacy compatibility path: the memory query snippet may remain
+        # only here and only under the historical root behavior (M011-S01 D3).
+        is_legacy = (
+            status.layout is not None
+            and status.layout.source == ProfileSource.LEGACY_FALLBACK
+        )
+        snippet = None
+        if is_legacy:
+            snippet = build_memory_prompt_snippet(
+                root=status.root,
+                query=f"{slice_id} {title}",
+                runner=memory_runner,
+            )
+        render = render_coding_prompt(
+            template,
+            snippet=snippet if (snippet is not None and snippet.has_content) else None,
+            posture_path=profile.llloom_posture_file or None,
+        )
     if render.valid and profile.prompt_pairing == "workflow_metadata":
         # M003-S02 (owner note 008): under the configured metadata pairing
         # the generated coding prompt must carry the same validated fenced
@@ -2600,6 +3064,35 @@ def _slice_slug(slice_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _configured_posture_reading(
+    status: ProjectStatus, profile: LayoutProfile
+) -> tuple[str, ...]:
+    """The selected memory-posture Read-First entry for a configured scaffold.
+
+    M011-S01 (D3): returns a single-element tuple with the selected profile's
+    posture file when the selected memory mode is ``lightweight`` or ``llloom``
+    (signalled by the mode-aware memory backend on the already-composed status),
+    and an empty tuple for mode ``none``/missing/invalid. Never queries memory
+    and never inserts raw memory command output.
+    """
+
+    if status.memory.backend in ("lightweight", "llloom") and profile.llloom_posture_file:
+        return (profile.llloom_posture_file,)
+    return ()
+
+
+def _dedup_append(existing: tuple[str, ...], additions: tuple[str, ...]) -> tuple[str, ...]:
+    """Append ``additions`` not already present by exact raw value, order-preserving."""
+
+    result = list(existing)
+    seen = set(existing)
+    for item in additions:
+        if item not in seen:
+            result.append(item)
+            seen.add(item)
+    return tuple(result)
+
+
 def _coding_scaffold_slots(profile: LayoutProfile, template: CodingPromptTemplate) -> dict:
     """The exact coding field-to-section mapping for the scaffold renderer.
 
@@ -3297,10 +3790,20 @@ def _build_review_prompt_plan_from_status(
     if profile.review_template:
         # M003-S03: a selected profile with a configured template path must
         # render through that scaffold; the hard-coded renderer is never a
-        # silent fallback.
+        # silent fallback. M011-S01 (D3): same selected-posture rule as the
+        # configured coding path — no memory query; route the selected posture
+        # file into Read First once when mode is lightweight/llloom.
+        posture_reading = _configured_posture_reading(status, profile)
+        if posture_reading:
+            review_template = replace(
+                review_template,
+                required_reading=_dedup_append(review_template.required_reading, posture_reading),
+            )
         render = _render_review_from_scaffold(status, profile, review_template)
     else:
-        render = render_review_prompt(review_template)
+        render = render_review_prompt(
+            review_template, posture_path=profile.llloom_posture_file or None
+        )
     preview = preview_review_prompt(review_template, prompt_dir=profile.review_prompt_dir)
     preview = _reconciled_preview(preview, render)
 

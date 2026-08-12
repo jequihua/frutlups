@@ -708,7 +708,7 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
             self.assertIn(verb, text)
 
     def test_exports_unchanged_and_no_private_helper_leakage(self) -> None:
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         for name in (
             "_layout_mutation_blockers",
             "_layout_mutation_refusal_message",

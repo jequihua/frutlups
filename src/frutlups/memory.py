@@ -298,6 +298,25 @@ def detect_memory(
     if not memory_root.exists():
         return DisabledMemoryBackend().status()
 
+    return observe_llloom_memory_root(memory_root, runner)
+
+
+def observe_llloom_memory_root(
+    memory_root: Path,
+    runner: MemoryCommandRunner | None = None,
+) -> MemoryStatus:
+    """Run the read-only ``status``/``doctor`` observation for an existing root.
+
+    Shared read-only observation used by both the legacy :func:`detect_memory`
+    sniff and the mode-aware selected-policy seam (M011-S01). The caller is
+    responsible for having confirmed that ``memory_root`` is a safe, contained,
+    existing directory; this function only issues the two non-mutating commands
+    through the supplied ``runner`` (or a fresh
+    :class:`SubprocessMemoryCommandRunner` when ``None``) and summarises the
+    result. Never raises; raw command output is not stored verbatim. This is a
+    private helper (not part of ``frutlups.__all__``).
+    """
+
     _runner = runner if runner is not None else SubprocessMemoryCommandRunner()
     backend = LlloomCliBackend(root=memory_root, runner=_runner)
 

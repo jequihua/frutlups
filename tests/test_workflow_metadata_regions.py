@@ -319,7 +319,7 @@ class RegionPurityTests(unittest.TestCase):
 
 class PublicSurfaceTests(unittest.TestCase):
     def test_exports_and_private_reader(self) -> None:
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         for name in (
             "_workflow_routing_mapping",
             "_parse_workflow_region",

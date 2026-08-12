@@ -63,6 +63,10 @@ class LlloomIntegrationGuideDocsTests(unittest.TestCase):
         # the actual status --json memory keys
         for key in ('"enabled"', '"backend"', '"diagnostics"'):
             self.assertIn(key, text, f"guide omits memory JSON key {key}")
+        self.assertIn('"memory_mode"', text)
+        self.assertIn('"contract_id": "frutlups.memory_mode"', text)
+        self.assertIn('"contract_version": "1"', text)
+        self.assertIn("Availability can never activate", text)
 
     def test_guide_separates_frutlups_and_llloom_commands(self) -> None:
         text = _GUIDE.read_text(encoding="utf-8")

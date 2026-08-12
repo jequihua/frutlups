@@ -63,7 +63,8 @@ temp directories (see `RELEASE_CHECKLIST.md`, step 5).
 ## 4. Read the current loop state
 
 `status` is your orientation command. It reports template health, the active
-roadmap, prompt inventory and health, memory state, and — most useful — the
+roadmap, prompt inventory and health, the versioned declared `memory_mode`,
+separate memory-backend health, and — most useful — the
 current **loop step** with the suggested next command:
 
 ```powershell

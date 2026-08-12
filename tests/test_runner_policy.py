@@ -866,7 +866,7 @@ class PublicSurfaceTests(unittest.TestCase):
         # 134 M003-S04/S05 baseline exports plus the eight M003-S06
         # planning-frontier exports approved and enumerated in
         # 02_analysis/m003_planning_frontier_status_compatibility_record.md.
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         for name in ("_evaluate_runner_policy", "_RunnerPolicyEvaluation", "_loop_resume_with_verdict"):
             self.assertFalse(hasattr(frutlups, name), name)
         import argparse

@@ -44,9 +44,15 @@ transcripts are never higher authority than the repository artifacts they cite.
 
 ## How memory appears in `frutlups`
 
-Memory state surfaces (read-only) in `frutlups status`. With no backend
-configured — the default for this repository — it reports disabled and the loop
-proceeds normally:
+Two different memory facts surface read-only in `frutlups status`:
+
+- `memory_mode` is the declaration-authoritative runner contract. It answers
+  what the project permits: `none`, `lightweight`, or `llloom`.
+- `memory` is a backend-health observation. Availability can never activate a
+  mode or grant permission.
+
+With mode `none` — the default when no declaration exists — backend health is
+disabled and the loop proceeds normally:
 
 ```powershell
 # frutlups command (venv), from 08_pkg/
@@ -55,7 +61,7 @@ proceeds normally:
 # Memory: disabled
 ```
 
-The machine-readable form carries the same state under a `memory` key:
+The machine-readable form carries both facts under separate keys:
 
 ```powershell
 .\.venv\Scripts\python.exe -m frutlups status .. --json
@@ -63,6 +69,14 @@ The machine-readable form carries the same state under a `memory` key:
 
 ```json
 {
+  "memory_mode": {
+    "contract_id": "frutlups.memory_mode",
+    "contract_version": "1",
+    "valid": true,
+    "mode": "none",
+    "memory_root": null,
+    "diagnostics": []
+  },
   "memory": {
     "enabled": false,
     "backend": "disabled",
@@ -73,11 +87,16 @@ The machine-readable form carries the same state under a `memory` key:
 }
 ```
 
-When a backend is configured, `enabled` becomes `true`, `backend` names the
-backend, `root` is the memory root, and `diagnostics` carries conservative,
-read-only notes. Detection never raises into the status/CLI path — an absent or
-broken backend is reported as state, not a crash. A project keeps memory disabled
-simply by not configuring an `llloom` memory root.
+An external runner must bind only contract id `frutlups.memory_mode`, version
+`"1"`, and a valid canonical mode. A malformed or ambiguous declaration has
+`valid: false` and must be refused rather than guessed. For `llloom`,
+`memory_root` is the safe declared repository-relative reference; it does not
+assert that the directory or executable is available.
+
+When an authorized backend is available, `enabled` becomes `true`, `backend`
+names the backend, `root` is the memory root, and `diagnostics` carries conservative,
+read-only notes. An absent or broken backend is reported as health state, not
+permission. A stale llloom directory under mode `none` remains disabled.
 
 ## Normal coding and review slices: read-only
 

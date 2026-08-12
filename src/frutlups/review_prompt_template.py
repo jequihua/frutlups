@@ -597,6 +597,7 @@ class ReviewPromptRenderResult:
 
 def render_review_prompt(
     template: ReviewPromptTemplate,
+    posture_path: str | None = None,
 ) -> ReviewPromptRenderResult:
     """Render a deterministic review-prompt markdown body for ``template``.
 
@@ -607,6 +608,12 @@ def render_review_prompt(
     caller-supplied list ordering preserved. Never writes files,
     never inspects the filesystem, and never raises for
     constructible templates.
+
+    ``posture_path`` (M011-S01) selects the memory operating/posture file cited
+    in the ``## llloom Integration Posture`` section. When ``None`` (the public
+    default) the historical ``05_governance/llloom_operating_model.md`` is used,
+    so direct public-call bytes are unchanged; project composition passes the
+    selected non-legacy profile's posture path instead.
     """
 
     errors = validate_review_prompt_template(template)
@@ -617,13 +624,19 @@ def render_review_prompt(
             errors=errors,
         )
     return ReviewPromptRenderResult(
-        content=_render_review_markdown(template),
+        content=_render_review_markdown(template, posture_path=posture_path),
         valid=True,
         errors=(),
     )
 
 
-def _render_review_markdown(template: ReviewPromptTemplate) -> str:
+_DEFAULT_LEGACY_POSTURE_PATH = "05_governance/llloom_operating_model.md"
+
+
+def _render_review_markdown(
+    template: ReviewPromptTemplate, posture_path: str | None = None
+) -> str:
+    posture = posture_path if posture_path else _DEFAULT_LEGACY_POSTURE_PATH
     sequence_text = format_prompt_sequence(template.sequence) or "???"
     lines: list[str] = []
 
@@ -739,7 +752,7 @@ def _render_review_markdown(template: ReviewPromptTemplate) -> str:
     lines.append("")
     lines.append(
         "Confirm that the slice preserves the future memory boundary "
-        "defined in `05_governance/llloom_operating_model.md`: no "
+        f"defined in `{posture}`: no "
         "memory reads, no memory writes, no command coupling, and no "
         "assumptions about unstable upstream internals. Normal coding "
         "or review slices must not mutate `llloom` workspaces."

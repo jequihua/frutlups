@@ -1027,7 +1027,7 @@ class StatusSurfaceTests(unittest.TestCase):
         ):
             self.assertIn(name, frutlups.__all__)
             self.assertTrue(hasattr(frutlups, name))
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
 
     def test_decision_to_dict_shape(self) -> None:
         decision = decide_planning_frontier_step(frontier=_forged(outcome="ready"))

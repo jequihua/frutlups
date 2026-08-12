@@ -45,14 +45,18 @@ A committed layout config may additionally opt into two closed layout modes
 
 ## Runner integration surface
 
-An automated runner consumes two read-only, versioned surfaces and may ask
+An automated runner consumes three read-only governed surfaces and may ask
 `frutlups` to perform its bounded safe writes:
 
 - `planning_frontier` — a versioned (`frutlups.planning_frontier`) outcome that
   maps the repository's durable state to exactly one behavior; and
-- `loop_resume` — the concrete next loop step plus the artifact paths involved.
+- `loop_resume` — the concrete next loop step plus the artifact paths involved;
+  and
+- `memory_mode` — the versioned (`frutlups.memory_mode`) declared memory mode,
+  independent of backend availability, with the safe repository-relative memory
+  root when the declared mode is `llloom`.
 
-Both are available as machine-readable JSON (`--json`). A runner never generates
+All are available together from `status --json`. A runner never generates
 governance artifacts itself: it observes the status, and when a write is due it
 invokes the matching `frutlups` verb, then re-reads the status.
 

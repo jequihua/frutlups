@@ -1377,8 +1377,8 @@ class PublicSurfaceTests(unittest.TestCase):
         for name in self.FIVE_NAMES:
             self.assertIn(name, frutlups.__all__)
             self.assertIs(getattr(frutlups, name), getattr(okf_profile, name))
-        self.assertEqual(len(frutlups.__all__), 147)
-        self.assertEqual(len(set(frutlups.__all__)), 147)
+        self.assertEqual(len(frutlups.__all__), 152)
+        self.assertEqual(len(set(frutlups.__all__)), 152)
 
     def test_no_private_observation_helper_is_re_exported(self) -> None:
         import frutlups

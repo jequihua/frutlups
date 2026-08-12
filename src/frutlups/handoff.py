@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from frutlups.layout import ProfileSource
 from frutlups.project import (
     LoopResumeStatus,
     LoopResumeStep,
@@ -105,18 +106,54 @@ def build_coder_handoff(
 # Renderer (private)
 # ---------------------------------------------------------------------------
 
-_REQUIRED_READING = (
+# M011-S01 (D3): the memory operating-model/posture reading entry is no longer a
+# fixed literal. The base list omits it; _handoff_required_reading inserts the
+# selected entry (or nothing) at _MEMORY_READING_INDEX so genuine legacy
+# fallbacks keep the historical `05_governance/llloom_operating_model.md` line
+# byte-for-byte, a selected template-v3 mode `none` cites nothing (it must not
+# imply memory is active or point at a nonexistent operating-model file), and
+# selected lightweight/llloom modes cite the one selected posture path.
+_REQUIRED_READING_BASE = (
     "CLAUDE.md",
     "README.md",
     "prompts/README.md",
     "03_experiments/active_roadmap_frutlups.md",
     "03_experiments/development_roadmap_frutlups.md",
     "05_governance/prompt_loop_operating_model.md",
-    "05_governance/llloom_operating_model.md",
     "06_infra/architecture.md",
     "08_pkg/README.md",
     "08_pkg/CONTEXT.md",
 )
+_MEMORY_READING_INDEX = 6
+_LEGACY_MEMORY_READING = "05_governance/llloom_operating_model.md"
+
+
+def _handoff_memory_reading(status: ProjectStatus) -> str | None:
+    """The selected memory operating-model/posture reading entry, or ``None``.
+
+    Uses one selected state/layout snapshot (M011-S01): genuine legacy fallback
+    keeps the historical operating-model path; a selected non-legacy profile
+    cites its posture file only when the selected memory mode is
+    lightweight/llloom (signalled by the mode-aware memory backend), and cites
+    nothing for mode none/missing/invalid.
+    """
+
+    layout = status.layout
+    if layout is None or layout.source == ProfileSource.LEGACY_FALLBACK:
+        return _LEGACY_MEMORY_READING
+    if status.memory.backend in ("lightweight", "llloom"):
+        return layout.profile.llloom_posture_file or None
+    return None
+
+
+def _handoff_required_reading(status: ProjectStatus) -> tuple[str, ...]:
+    """The deterministic handoff Required-Reading list for the selected profile."""
+
+    entries = list(_REQUIRED_READING_BASE)
+    memory_reading = _handoff_memory_reading(status)
+    if memory_reading:
+        entries.insert(_MEMORY_READING_INDEX, memory_reading)
+    return tuple(entries)
 
 _VERIFICATION_COMMANDS = (
     "$env:PYTHONPATH='src'",
@@ -250,7 +287,7 @@ def _render(
     lines.append("## Required Reading Before Any Slice")
     lines.append("")
     lines.append("```text")
-    for entry in _REQUIRED_READING:
+    for entry in _handoff_required_reading(status):
         lines.append(entry)
     lines.append("```")
     lines.append("")
@@ -646,7 +683,7 @@ def _render_reviewer(
     lines.append("## Required Reading Before Reviewing")
     lines.append("")
     lines.append("```text")
-    for entry in _REQUIRED_READING:
+    for entry in _handoff_required_reading(status):
         lines.append(entry)
     lines.append("```")
     lines.append("")
@@ -711,13 +748,18 @@ def _render_reviewer(
     # Memory Rules
     lines.append("## Memory Rules")
     lines.append("")
+    memory_reading = _handoff_memory_reading(status)
+    posture_sentence = (
+        f" Read `{memory_reading}` before relying on exact `llloom` command details."
+        if memory_reading
+        else ""
+    )
     lines.append(
         "`llloom` is optional and still in development. Normal review slices "
         "must not mutate memory; memory access, if any, is read-only. Do not "
         "edit claim YAML, rendered pages, sidecars, journals, indexes, or "
         "locks. Memory mutation belongs only in an explicit memory-update "
-        "slice. Read `05_governance/llloom_operating_model.md` before relying "
-        "on exact `llloom` command details."
+        "slice." + posture_sentence
     )
     lines.append("")
 

@@ -608,7 +608,7 @@ class HostileDataTests(unittest.TestCase):
 
 class PublicSurfaceTests(unittest.TestCase):
     def test_exports_and_verbs_unchanged(self) -> None:
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         self.assertFalse(hasattr(frutlups, "render_configured_scaffold"))
         import argparse
 
@@ -1064,7 +1064,7 @@ class LegacyAndSurfacePreservationTests(unittest.TestCase):
             self.assertEqual(plan.render.content, direct.content)
 
     def test_no_new_module_export(self) -> None:
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         self.assertNotIn("render_configured_scaffold", frutlups.__all__)
         self.assertNotIn("ScaffoldSlot", frutlups.__all__)
 
@@ -1739,7 +1739,7 @@ class HeadingPurityAndSurfaceTests(unittest.TestCase):
         self.assertEqual(scaffold_bytes_after, scaffold_bytes)
 
     def test_public_surface_unchanged(self) -> None:
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         import argparse
 
         from frutlups.cli import _build_parser

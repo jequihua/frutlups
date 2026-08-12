@@ -2473,7 +2473,7 @@ class PublicSurfaceTests(unittest.TestCase):
         # 134 M003-S05 baseline exports plus the eight M003-S06
         # planning-frontier exports approved and enumerated in
         # 02_analysis/m003_planning_frontier_status_compatibility_record.md.
-        self.assertEqual(len(frutlups.__all__), 147)  # 142 + 5 M004 okf-profile observation exports (02_analysis/m004_okf_profile_observation_compatibility_record.md)
+        self.assertEqual(len(frutlups.__all__), 152)
         for name in (
             "_collect_acceptance_evidence",
             "_AcceptanceEvidence",

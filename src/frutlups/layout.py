@@ -284,6 +284,17 @@ class LayoutProfile:
     prompt_numbering: str = "per_kind_sequence"
     prompt_pairing: str = "same_sequence"
     reports_discovery: str = "flat"
+    # M011-S01: optional-lane llloom memory posture. These carry the selected
+    # profile's safe repo-relative machine paths for the mode-aware memory
+    # observation and deterministic posture routing. Defaults are the
+    # v2/template-v3 values; the legacy fallback overrides them with the
+    # historical locations. An empty ``llloom_memory_root`` is a deliberate
+    # "unsafe configured root -> disable, do not fall back" sentinel. These are
+    # intentionally NOT serialized in ``to_dict`` so the layout-profile JSON
+    # contract (and the planning-frontier/status shapes that embed it) is
+    # unchanged by this correction.
+    llloom_memory_root: str = "llloom_memory"
+    llloom_posture_file: str = "05_governance/current/memory_posture.md"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -438,6 +449,10 @@ def legacy_profile() -> LayoutProfile:
         mode_fields=(),
         current_truth_fields=(),
         validation_command="",
+        # M011-S01: genuine legacy fallback keeps the historical memory
+        # locations so config-less legacy projects behave exactly as before.
+        llloom_memory_root="07_app/llloom_memory",
+        llloom_posture_file="05_governance/llloom_operating_model.md",
     )
 
 
@@ -587,6 +602,62 @@ def resolve_under_root(root: Path, rel: str) -> Path:
     if not is_safe_relative(rel):
         raise ValueError(f"unsafe layout path (absolute or escapes template root): {rel!r}")
     return root / PurePosixPath(rel.strip().replace("\\", "/"))
+
+
+MEMORY_LANE_PATH_MAX = 200
+"""Conservative upper bound for a configured optional-lane memory path.
+
+Memory-lane paths (``optional_lanes.llloom.memory_root`` / ``posture_file``) are
+repository-relative and are rendered inside Markdown code spans/fences in
+generated prompts and handoffs. There is no reusable path bound in the accepted
+layout schema, so M011-S01 (Prompt 044 Gate C) fixes this smallest conservative
+bound so generated diagnostics/artifacts stay bounded and single-line. It is far
+larger than any real repo-relative memory path yet small enough to keep a code
+span on one rendered line.
+"""
+
+
+def normalize_memory_lane_path(raw: object) -> str | None:
+    """Validate and normalize a configured optional-lane memory path.
+
+    One shared memory-lane path contract (M011-S01, Prompt 044 Gate C) used for
+    both ``optional_lanes.llloom.memory_root`` and ``posture_file``. Returns the
+    normalized safe repository-relative path, or ``None`` when the value is
+    missing, non-string, structurally active, out of bounds, or otherwise unsafe.
+    The rejected value is never echoed by the caller's diagnostics.
+
+    A value is accepted only when, after normalizing surrounding whitespace and
+    path separators exactly once, it is a non-empty repository-relative path
+    (existing :func:`is_safe_relative` semantics) that is a single logical line
+    and free of backticks and ASCII control/DEL characters. Multiline values
+    (``\\r``, ``\\n``, Unicode line/paragraph separators, or any value whose
+    ``str.splitlines`` yields more than one line), backtick-bearing values, and
+    values longer than :data:`MEMORY_LANE_PATH_MAX` are rejected so the selected
+    path cannot introduce a fence, heading, or other live Markdown structure into
+    any prompt or handoff consumer. Ordinary safe overrides are preserved
+    byte-for-byte after the declared strip/separator normalization.
+    """
+
+    if not isinstance(raw, str):
+        return None
+    # Reject multiline before any stripping: explicit CR/LF, Unicode line and
+    # paragraph separators, and anything ``splitlines`` treats as multiple lines.
+    if "\r" in raw or "\n" in raw or len(raw.splitlines()) > 1:
+        return None
+    if any(ord(ch) in (0x2028, 0x2029, 0x85, 0x0B, 0x0C) for ch in raw):
+        return None
+    text = raw.strip().replace("\\", "/")
+    if not text:
+        return None
+    if len(text) > MEMORY_LANE_PATH_MAX:
+        return None
+    # Reject backticks and ASCII control/DEL: the selected path is rendered
+    # inside Markdown code spans/fences.
+    if "`" in text or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return None
+    if not is_safe_relative(text):
+        return None
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -880,6 +951,58 @@ def profile_from_config(
         strict=True,
     )
 
+    # M011-S01 (Prompt 044 Gate C): optional-lane llloom paths flow through one
+    # shared typed contract (:func:`normalize_memory_lane_path`) so a configured
+    # value can never carry a line break, fence, heading, backtick, control
+    # character, or over-length payload into any prompt/handoff consumer. A
+    # missing key keeps the profile-specific default. A present-but-unsafe value
+    # is rejected with role-specific failure and an owned, bounded, non-echoing
+    # warning:
+    #   - an unsafe ``posture_file`` becomes the deterministic disabled posture
+    #     sentinel ("") so active composition omits/fails closed rather than
+    #     citing the profile default as though the override had been accepted;
+    #   - an unsafe ``memory_root`` becomes the disable-without-fallback sentinel
+    #     ("") so the memory observation is disabled without adopting another root.
+    llloom_posture_file = base.llloom_posture_file
+    raw_posture = _get(config, "optional_lanes", "llloom", "posture_file")
+    if raw_posture is not None:
+        normalized_posture = normalize_memory_lane_path(raw_posture)
+        if normalized_posture is not None:
+            llloom_posture_file = normalized_posture
+        else:
+            llloom_posture_file = ""
+            diagnostics.append(
+                LayoutDiagnostic(
+                    code="unsafe_memory_posture_path",
+                    severity=LayoutDiagnosticSeverity.WARNING,
+                    message=(
+                        "optional_lanes.llloom.posture_file is not a safe, bounded, "
+                        "single-line repository-relative path; disabling the "
+                        "configured posture without using the profile default"
+                    ),
+                )
+            )
+
+    llloom_memory_root = base.llloom_memory_root
+    raw_root = _get(config, "optional_lanes", "llloom", "memory_root")
+    if raw_root is not None:
+        normalized_root = normalize_memory_lane_path(raw_root)
+        if normalized_root is not None:
+            llloom_memory_root = normalized_root
+        else:
+            llloom_memory_root = ""
+            diagnostics.append(
+                LayoutDiagnostic(
+                    code="unsafe_memory_root",
+                    severity=LayoutDiagnosticSeverity.WARNING,
+                    message=(
+                        "optional_lanes.llloom.memory_root is not a safe, bounded, "
+                        "single-line repository-relative path; disabling the llloom "
+                        "memory observation without falling back to another root"
+                    ),
+                )
+            )
+
     diagnostics.extend(_advisory_path_diagnostics(config))
 
     profile = LayoutProfile(
@@ -926,6 +1049,8 @@ def profile_from_config(
         prompt_numbering=prompt_numbering,
         prompt_pairing=prompt_pairing,
         reports_discovery=reports_discovery,
+        llloom_memory_root=llloom_memory_root,
+        llloom_posture_file=llloom_posture_file,
     )
     return profile, tuple(diagnostics)
 

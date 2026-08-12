@@ -123,13 +123,18 @@ from frutlups.orchestrator import (
     run_one_step,
 )
 from frutlups.project import (
+    MEMORY_MODE_CONTRACT_ID,
+    MEMORY_MODE_CONTRACT_VERSION,
+    MEMORY_MODE_SUPPORTED_VERSIONS,
     PLANNING_FRONTIER_CONTRACT_ID,
     PLANNING_FRONTIER_CONTRACT_VERSION,
     PLANNING_FRONTIER_SUPPORTED_VERSIONS,
+    MemoryModeStatus,
     PlanningFrontierOutcome,
     PlanningFrontierStatus,
     ProjectLayout,
     ProjectStatus,
+    build_memory_mode_status,
     build_status,
     find_project_root,
 )
@@ -214,8 +219,12 @@ __all__ = [
     "LoadedLayout",
     "ManualArtifactSource",
     "ManualPromptSink",
+    "MEMORY_MODE_CONTRACT_ID",
+    "MEMORY_MODE_CONTRACT_VERSION",
+    "MEMORY_MODE_SUPPORTED_VERSIONS",
     "MockArtifactSource",
     "MockPromptSink",
+    "MemoryModeStatus",
     "OKF_PROFILE_OBSERVATION_CONTRACT_ID",
     "OKF_PROFILE_OBSERVATION_CONTRACT_VERSION",
     "OKFProfileObservation",
@@ -262,6 +271,7 @@ __all__ = [
     "build_coder_handoff",
     "build_final_handoff",
     "build_human_gate",
+    "build_memory_mode_status",
     "build_orchestrator_plan",
     "build_planning_frontier_status",
     "decide_planning_frontier_step",
@@ -330,4 +340,4 @@ __all__ = [
     "write_question_artifact",
 ]
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

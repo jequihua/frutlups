@@ -240,6 +240,13 @@ class SliceKind(StrEnum):
     ``MEMORY_UPDATE`` marks slices that explicitly mutate a ``llloom``
     workspace; these require separate review evidence and are segregated
     from normal read-only loop work.
+
+    The enum members are retained for compatibility, but no milestone
+    identifier, title, substring, directory name, or memory-root presence
+    grants ``MEMORY_UPDATE`` by inference (M011-S01). Until a separately
+    decided explicit slice-kind grammar exists, mutation permission comes
+    only from a human-owned coding prompt/slice assignment, never from an
+    identifier.
     """
 
     NORMAL = "normal"
@@ -249,10 +256,14 @@ class SliceKind(StrEnum):
 def classify_slice_kind(milestone_id: str) -> SliceKind:
     """Return the work classification for a slice based on its milestone.
 
-    M010 slices are explicit memory-update work. All others are normal.
+    Always ``NORMAL``. Milestone identity — including ``M010`` and any case
+    variant — no longer confers memory-update authority (M011-S01 removed the
+    repository-history leak that classified every ``M010`` milestone as a
+    memory-mutation slice). No replacement heuristic is introduced: an explicit
+    slice-kind grammar is a separate future template/frutlups contract decision.
+    Until then, a slice is memory-update only when a human-owned prompt says so.
     """
-    if milestone_id.upper() == "M010":
-        return SliceKind.MEMORY_UPDATE
+
     return SliceKind.NORMAL
 
 
