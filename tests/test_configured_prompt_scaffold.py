@@ -90,6 +90,64 @@ def _make_v2_project(root: Path, *, scaffolds: bool = True) -> None:
     )
 
 
+def _make_project_derived_v2_project(
+    root: Path,
+    *,
+    coder_review: str = "only when the active prompt or project convention explicitly allows it",
+) -> None:
+    """A configured project with non-default paths and authored milestone fields."""
+
+    _make_v2_project(root)
+    (root / "state").mkdir()
+    (root / "state" / "CURRENT.md").write_text(_V2_STATE, encoding="utf-8")
+    (root / "planning").mkdir()
+    (root / "planning" / "live_plan.md").write_text(
+        "### M001: Acme Compiler\n\n"
+        "Status: active\n\n"
+        "Objective:\n"
+        "Build the Acme compiler from the project's own contracts.\n\n"
+        "Active workspaces:\n"
+        "- `08_pkg`, `09_ops`.\n\n"
+        "Non-goals:\n"
+        "- Do not add a dashboard.\n"
+        "- Do not use the network.\n\n"
+        "Verification/evidence:\n"
+        "- run the Acme product suite;\n"
+        "- inspect `evidence/report.json`.\n\n"
+        "Done when:\n"
+        "- the Acme compiler behavior is implemented.\n",
+        encoding="utf-8",
+    )
+    (root / "planning" / "design_plan.md").write_text(
+        "### M001: Acme Compiler\n\n"
+        "Slices:\n\n"
+        "- M001-S01: ship the Acme compiler\n",
+        encoding="utf-8",
+    )
+    for workspace in ("08_pkg", "09_ops"):
+        (root / workspace).mkdir(exist_ok=True)
+        (root / workspace / "GUIDE.md").write_text(
+            f"# {workspace} orientation\n", encoding="utf-8"
+        )
+    (root / "frutlups.layout.yaml").write_text(
+        "schema_version: frutlups_layout_config_v0\n"
+        "profile_id: artifact_first_template_v3\n"
+        "workspace_map:\n"
+        "  context_filename: GUIDE.md\n"
+        "state:\n"
+        "  canonical_file: state/CURRENT.md\n"
+        "roadmaps:\n"
+        "  directory: planning\n"
+        "  active_roadmap_glob: live*.md\n"
+        "  development_roadmap_glob: design*.md\n"
+        "prompts:\n"
+        f"  coder_may_create_review_prompt: {coder_review}\n"
+        "automation_boundary:\n"
+        "  runner_implemented: true\n",
+        encoding="utf-8",
+    )
+
+
 def _make_legacy_project(root: Path) -> None:
     for name in (
         "00_brief",
@@ -339,7 +397,7 @@ class SlotSubstitutionTests(unittest.TestCase):
         self.assertIn("## Active Workspaces\n\n- 08_pkg/\n", content)
         self.assertIn("- CLAUDE.md\n", content)
         self.assertIn(
-            "## Task\n\nImplement M001-S01: first slice.\n\nYou are the coding agent for `frutlups`.",
+            "## Task\n\nImplement M001-S01: first slice.\n\nYou are the coding agent for this project.",
             content,
         )
         self.assertIn(
@@ -377,6 +435,55 @@ class SlotSubstitutionTests(unittest.TestCase):
         self.assertEqual(meta.slice_id, plan.template.slice_id)
         self.assertEqual(meta.self_report_path, plan.template.self_report_path)
 
+
+class ProjectDerivedPromptTests(unittest.TestCase):
+    def test_configured_coding_prompt_uses_project_authorities(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_project_derived_v2_project(root)
+            plan = build_coding_prompt_plan(root)
+
+        self.assertTrue(plan.valid, plan.errors)
+        self.assertEqual(
+            plan.template.required_reading,
+            (
+                "CLAUDE.md",
+                "README.md",
+                "state/CURRENT.md",
+                "planning/live_plan.md",
+                "planning/design_plan.md",
+                "08_pkg/GUIDE.md",
+                "09_ops/GUIDE.md",
+            ),
+        )
+        self.assertEqual(plan.template.scope_paths, ("08_pkg", "09_ops"))
+        self.assertEqual(
+            plan.template.non_goals,
+            ("Do not add a dashboard.", "Do not use the network."),
+        )
+        self.assertEqual(
+            plan.template.verification_commands,
+            ("run the Acme product suite;", "inspect `evidence/report.json`."),
+        )
+        self.assertIn("ship the Acme compiler", plan.render.content)
+        self.assertIn(
+            "Build the Acme compiler from the project's own contracts.",
+            plan.render.content,
+        )
+        self.assertIn("You are the coding agent for this project.", plan.render.content)
+        self.assertNotIn("coding agent for `frutlups`", plan.render.content)
+        self.assertNotIn("local-first, artifact-first", plan.render.content)
+        self.assertNotIn("python -m compileall", plan.render.content)
+        self.assertNotIn("Matching review prompt is created.", plan.render.content)
+
+    def test_explicit_boolean_policy_allows_review_prompt_dod(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_project_derived_v2_project(root, coder_review="true")
+            plan = build_coding_prompt_plan(root)
+
+        self.assertTrue(plan.valid, plan.errors)
+        self.assertIn("Matching review prompt is created.", plan.render.content)
 
 class ReviewScaffoldTests(unittest.TestCase):
     def test_review_slots_and_single_region(self) -> None:
@@ -648,6 +755,47 @@ def _make_v2_review_project(root: Path) -> None:
         for heading in _SR_HEADINGS
     ]
     report.write_text("# Coder Self-Report\n\n" + "\n".join(parts), encoding="utf-8")
+
+
+class ProjectDerivedReviewPromptTests(unittest.TestCase):
+    def test_make_review_prompt_keeps_neutral_identity_and_derived_reading(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_project_derived_v2_project(root)
+            coding = build_coding_prompt_plan(root)
+            self.assertTrue(coding.valid, coding.errors)
+            (root / coding.preview.target_path).write_text(
+                coding.render.content, encoding="utf-8"
+            )
+            report = root / coding.template.self_report_path
+            report.parent.mkdir(parents=True, exist_ok=True)
+            parts = [
+                f"{heading}\n\n"
+                + (
+                    "- 08_pkg/src/acme.py\n"
+                    if heading == "Files Changed:"
+                    else "run the Acme product suite\n"
+                    if heading == "Verification Run:"
+                    else "x\n"
+                )
+                for heading in _SR_HEADINGS
+            ]
+            report.write_text(
+                "# Coder Self-Report\n\n" + "\n".join(parts), encoding="utf-8"
+            )
+            review = build_review_prompt_plan(root)
+
+        self.assertTrue(review.valid, review.errors)
+        self.assertIn("You are the reviewer for this project.", review.render.content)
+        self.assertNotIn("reviewer for `frutlups`", review.render.content)
+        for reading in (
+            "state/CURRENT.md",
+            "planning/live_plan.md",
+            "planning/design_plan.md",
+            "08_pkg/GUIDE.md",
+            "09_ops/GUIDE.md",
+        ):
+            self.assertIn(f"`{reading}`", review.render.content)
 
 
 def _snapshot(root: Path) -> dict[str, str]:

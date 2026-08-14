@@ -1368,6 +1368,237 @@ def _next_prompt_sequence(prompt_artifacts: tuple[PromptArtifact, ...]) -> int:
     return max_seq + 1
 
 
+@dataclass(frozen=True)
+class _RoadmapPromptFields:
+    """Milestone-authored content used only while composing prompt drafts."""
+
+    objective: str = ""
+    active_workspaces: tuple[str, ...] = ()
+    non_goals: tuple[str, ...] = ()
+    verification: tuple[str, ...] = ()
+
+
+_ROADMAP_PLAIN_FIELD_RE = re.compile(
+    r"^\s*(?P<label>[A-Za-z][^:\n]{0,80}):\s*(?P<value>.*)$"
+)
+_ROADMAP_BOLD_FIELD_RE = re.compile(
+    r"^\s*\*\*(?P<label>[^*\n]{1,80}?)[.:]\*\*\s*(?P<value>.*)$"
+)
+
+
+def _roadmap_prompt_field_name(label: str) -> str:
+    """Map the supported roadmap labels to their prompt-composition roles."""
+
+    normalized = " ".join(label.strip().lower().replace("-", " ").split())
+    compact = normalized.replace(" ", "")
+    if normalized.startswith("objective"):
+        return "objective"
+    if normalized == "active workspaces":
+        return "active_workspaces"
+    if normalized == "non goals":
+        return "non_goals"
+    if compact.startswith("verification/") or compact.startswith("tests/"):
+        return "verification"
+    return ""
+
+
+def _is_roadmap_field_boundary(label: str) -> bool:
+    """Whether a plain ``Label:`` line is a roadmap field, not prose."""
+
+    normalized = " ".join(label.strip().lower().replace("-", " ").split())
+    return normalized in {
+        "status",
+        "disposition",
+        "slices",
+        "implementation package",
+        "objective",
+        "expected artifacts",
+        "active workspaces",
+        "non goals",
+        "verification/evidence",
+        "review strictness",
+        "likely coding prompt",
+        "done when",
+        "closure evidence",
+        "authority checkpoints",
+        "opening gates",
+        "prerequisites",
+        "owned surfaces",
+        "artifacts",
+        "tests / evidence",
+        "rollback",
+        "strictness",
+        "decision gates",
+        "prompt route",
+    }
+
+
+def _roadmap_field_items(lines: list[str]) -> tuple[str, ...]:
+    """Turn one authored prose/list field into ordered, wrapped items."""
+
+    items: list[str] = []
+    current: list[str] = []
+    current_is_bullet = False
+
+    def flush() -> None:
+        nonlocal current, current_is_bullet
+        value = " ".join(part.strip() for part in current if part.strip()).strip()
+        if value:
+            items.append(value)
+        current = []
+        current_is_bullet = False
+
+    for line in lines:
+        bullet = re.match(r"^\s*[-*]\s+(.+?)\s*$", line)
+        if bullet:
+            flush()
+            current = [bullet.group(1)]
+            current_is_bullet = True
+            continue
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        if current_is_bullet and line.startswith((" ", "\t")):
+            current.append(stripped)
+            continue
+        if current_is_bullet:
+            flush()
+        current.append(stripped)
+    flush()
+    return tuple(items)
+
+
+def _parse_roadmap_prompt_fields(path: Path, milestone_id: str) -> _RoadmapPromptFields:
+    """Read the named milestone's authored Objective/Non-goals/evidence fields.
+
+    Both template-v3's plain ``Field:`` grammar and the development roadmap's
+    historical ``**Field.**`` grammar are accepted. The helper is private so
+    the released roadmap dataclass and status JSON shapes remain unchanged.
+    """
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return _RoadmapPromptFields()
+
+    wanted = milestone_id.upper()
+    in_milestone = False
+    current_field = ""
+    collected: dict[str, list[str]] = {
+        "objective": [],
+        "active_workspaces": [],
+        "non_goals": [],
+        "verification": [],
+    }
+
+    for line in lines:
+        milestone = re.match(r"^###\s+(M\d+):", line, re.IGNORECASE)
+        if milestone:
+            if in_milestone:
+                break
+            in_milestone = milestone.group(1).upper() == wanted
+            current_field = ""
+            continue
+        if not in_milestone:
+            continue
+
+        bold_match = _ROADMAP_BOLD_FIELD_RE.match(line)
+        plain_match = _ROADMAP_PLAIN_FIELD_RE.match(line)
+        field_match = bold_match or plain_match
+        if field_match:
+            label = field_match.group("label")
+            if bold_match is not None or _is_roadmap_field_boundary(label):
+                current_field = _roadmap_prompt_field_name(label)
+                inline = field_match.group("value").strip()
+                if current_field and inline:
+                    collected[current_field].append(inline)
+                continue
+        if current_field:
+            collected[current_field].append(line)
+
+    objective_items = _roadmap_field_items(collected["objective"])
+    workspace_items = _roadmap_field_items(collected["active_workspaces"])
+    workspaces: list[str] = []
+    for item in workspace_items:
+        for match in _PROMPT_BACKTICK_RE.finditer(item):
+            candidate = match.group(1).strip().rstrip("/")
+            if candidate and is_safe_relative(candidate) and candidate not in workspaces:
+                workspaces.append(candidate)
+
+    return _RoadmapPromptFields(
+        objective="\n\n".join(objective_items),
+        active_workspaces=tuple(workspaces),
+        non_goals=_roadmap_field_items(collected["non_goals"]),
+        verification=_roadmap_field_items(collected["verification"]),
+    )
+
+
+def _frontier_prompt_fields(status: ProjectStatus, milestone_id: str) -> _RoadmapPromptFields:
+    """Merge the active roadmap's fields with detailed-roadmap fallbacks."""
+
+    sources: list[Path] = []
+    for candidate in (status.active_roadmap, status.detailed_roadmap):
+        if candidate is not None and candidate not in sources:
+            sources.append(candidate)
+    parsed = [_parse_roadmap_prompt_fields(path, milestone_id) for path in sources]
+
+    def first_text(name: str) -> str:
+        return next((getattr(value, name) for value in parsed if getattr(value, name)), "")
+
+    def first_tuple(name: str) -> tuple[str, ...]:
+        return next((getattr(value, name) for value in parsed if getattr(value, name)), ())
+
+    return _RoadmapPromptFields(
+        objective=first_text("objective"),
+        active_workspaces=first_tuple("active_workspaces"),
+        non_goals=first_tuple("non_goals"),
+        verification=first_tuple("verification"),
+    )
+
+
+def _relative_project_path(root: Path, path: Path | None) -> str:
+    """Return one safe repository-relative POSIX path, or an empty string."""
+
+    if path is None:
+        return ""
+    try:
+        relative = path.resolve(strict=False).relative_to(root.resolve(strict=False)).as_posix()
+    except (OSError, ValueError):
+        return ""
+    return relative if is_safe_relative(relative) else ""
+
+
+def _project_required_reading(
+    status: ProjectStatus,
+    profile: LayoutProfile,
+    fields: _RoadmapPromptFields,
+) -> tuple[str, ...]:
+    """Compose real project readings in stable order for configured prompts."""
+
+    candidates: list[str] = []
+    # These are the long-standing prompt-model baselines. Configured projects
+    # add their selected state/roadmap/context paths below; legacy rendering is
+    # handled separately and remains byte-compatible.
+    candidates.extend(("CLAUDE.md", "README.md"))
+    if profile.state_file and is_safe_relative(profile.state_file):
+        candidates.append(profile.state_file.strip().replace("\\", "/"))
+    candidates.extend(
+        path
+        for path in (
+            _relative_project_path(status.root, status.active_roadmap),
+            _relative_project_path(status.root, status.detailed_roadmap),
+        )
+        if path
+    )
+    if profile.context_filename:
+        for workspace in fields.active_workspaces:
+            context = f"{workspace}/{profile.context_filename}"
+            if is_safe_relative(context) and (status.root / PurePosixPath(context)).is_file():
+                candidates.append(context)
+    return _dedup_append((), tuple(candidates))
+
+
 def build_coding_prompt_plan(
     start: Path | str = ".",
     *,
@@ -1509,47 +1740,89 @@ def _build_coding_prompt_plan_from_status(
 
     is_memory_update = frontier.slice_kind == SliceKind.MEMORY_UPDATE
 
-    template = CodingPromptTemplate(
-        sequence=sequence,
-        milestone_id=milestone_id,
-        slice_id=slice_id,
-        slug=slug.strip(),
-        title=title,
-        role_instructions=(
+    configured_prompt = bool(profile.coding_template)
+    prompt_fields = (
+        _frontier_prompt_fields(status, milestone_id)
+        if configured_prompt
+        else _RoadmapPromptFields()
+    )
+    if configured_prompt:
+        role_instructions = "You are the coding agent for this project."
+        if prompt_fields.objective:
+            role_instructions += (
+                "\n\nMilestone objective:\n" + prompt_fields.objective
+            )
+        required_reading = _project_required_reading(status, profile, prompt_fields)
+        scope_paths = prompt_fields.active_workspaces or ("08_pkg/",)
+        non_goals = prompt_fields.non_goals or (
+            "Do not implement future milestones or unrelated behavior.",
+            "Do not mutate active roadmap state.",
+        )
+        verification_commands = prompt_fields.verification or (
+            profile.validation_command or "python -m unittest discover -s tests",
+        )
+        definition_of_done = list(
+            inferred_milestone.done_criteria
+            if inferred_milestone is not None and inferred_milestone.done_criteria
+            else (
+                "All required behavior is implemented and tested.",
+                "Existing project verification remains green.",
+                "Self-report is written.",
+            )
+        )
+        if profile.coder_may_create_review_prompt:
+            definition_of_done.append("Matching review prompt is created.")
+    else:
+        # The genuine legacy path retains the released 0.1.2 bytes and its
+        # historical home-repository assumptions.
+        role_instructions = (
             "You are the coding agent for `frutlups`.\n\n"
             "Implement this slice. Keep the package local-first, "
             "artifact-first, provider-neutral, deterministic, and "
             "limited to the standard library plus already declared "
             "runtime dependencies."
-        ),
-        required_reading=(
+        )
+        required_reading = (
             "CLAUDE.md",
             "README.md",
             "08_pkg/CONTEXT.md",
             "08_pkg/README.md",
             "03_experiments/active_roadmap_frutlups.md",
             "06_infra/architecture.md",
-        ),
-        scope_paths=("08_pkg/",),
-        non_goals=(
+        )
+        scope_paths = ("08_pkg/",)
+        non_goals = (
             "Do not implement future milestones or unrelated behavior.",
             "Do not mutate active roadmap state.",
             "Do not add a new dependency without authorization.",
             "Do not add llloom integration beyond existing status detection.",
-        ),
-        definition_of_done=(
+        )
+        definition_of_done = [
             "All required behavior is implemented and tested.",
             "Existing test suite remains green.",
             "Self-report is written.",
             "Matching review prompt is created.",
-        ),
-        verification_commands=(
+        ]
+        verification_commands = (
             "$env:PYTHONPATH='src'",
             "python -m unittest discover -s tests",
             "python -m frutlups status ..",
             "python -m frutlups next ..",
             "python -m compileall -q src",
-        ),
+        )
+
+    template = CodingPromptTemplate(
+        sequence=sequence,
+        milestone_id=milestone_id,
+        slice_id=slice_id,
+        slug=slug.strip(),
+        title=title,
+        role_instructions=role_instructions,
+        required_reading=required_reading,
+        scope_paths=scope_paths,
+        non_goals=non_goals,
+        definition_of_done=tuple(definition_of_done),
+        verification_commands=verification_commands,
         self_report_path=self_report_path,
         memory_update=is_memory_update,
     )
@@ -3747,14 +4020,30 @@ def _build_review_prompt_plan_from_status(
             evidence,
         )
 
-    reading = list(meta.required_reading)
-    for baseline in ("CLAUDE.md", "README.md"):
-        if baseline not in reading:
-            reading.insert(0, baseline)
-    if "CLAUDE.md" in reading and "README.md" in reading:
-        reading = ["CLAUDE.md", "README.md"] + [
-            r for r in reading if r not in ("CLAUDE.md", "README.md")
-        ]
+    if profile.review_template:
+        review_fields = _frontier_prompt_fields(status, meta.milestone_id)
+        reading = list(_project_required_reading(status, profile, review_fields))
+    else:
+        reading = list(meta.required_reading)
+        for baseline in ("CLAUDE.md", "README.md"):
+            if baseline not in reading:
+                reading.insert(0, baseline)
+        if "CLAUDE.md" in reading and "README.md" in reading:
+            reading = ["CLAUDE.md", "README.md"] + [
+                r for r in reading if r not in ("CLAUDE.md", "README.md")
+            ]
+
+    review_role = (
+        "You are the reviewer for this project.\n\n"
+        "Review the coder's implementation against the coding prompt, "
+        "the self-report, and the project framework."
+        if profile.review_template
+        else (
+            "You are the reviewer for `frutlups`.\n\n"
+            "Review the coder's implementation against the coding prompt, "
+            "the self-report, and the project framework."
+        )
+    )
 
     review_template = ReviewPromptTemplate(
         sequence=sequence,
@@ -3762,11 +4051,7 @@ def _build_review_prompt_plan_from_status(
         slice_id=meta.slice_id,
         slug=effective_slug,
         title=meta.title,
-        role_instructions=(
-            "You are the reviewer for `frutlups`.\n\n"
-            "Review the coder's implementation against the coding prompt, "
-            "the self-report, and the project framework."
-        ),
+        role_instructions=review_role,
         required_reading=tuple(reading),
         coding_prompt_path=meta.coding_prompt_path,
         self_report_path=meta.self_report_path,

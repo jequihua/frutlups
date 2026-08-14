@@ -295,6 +295,10 @@ class LayoutProfile:
     # unchanged by this correction.
     llloom_memory_root: str = "llloom_memory"
     llloom_posture_file: str = "05_governance/current/memory_posture.md"
+    # Prompt-composition inputs intentionally stay out of ``to_dict`` so this
+    # correction does not widen the released layout/status JSON shapes.
+    context_filename: str = "CONTEXT.md"
+    coder_may_create_review_prompt: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -453,6 +457,8 @@ def legacy_profile() -> LayoutProfile:
         # locations so config-less legacy projects behave exactly as before.
         llloom_memory_root="07_app/llloom_memory",
         llloom_posture_file="05_governance/llloom_operating_model.md",
+        context_filename="",
+        coder_may_create_review_prompt=True,
     )
 
 
@@ -830,6 +836,30 @@ def profile_from_config(
 
     # State + modes.
     state_file = _as_str(_get(config, "state", "canonical_file"), base.state_file)
+    context_filename = _as_str(
+        _get(config, "workspace_map", "context_filename"), base.context_filename
+    ).strip()
+    if (
+        not context_filename
+        or context_filename in (".", "..")
+        or "/" in context_filename
+        or "\\" in context_filename
+        or any(ord(char) < 32 for char in context_filename)
+    ):
+        context_filename = base.context_filename
+
+    raw_coder_review_policy = _get(config, "prompts", "coder_may_create_review_prompt")
+    if isinstance(raw_coder_review_policy, bool):
+        coder_may_create_review_prompt = raw_coder_review_policy
+    elif isinstance(raw_coder_review_policy, str):
+        coder_may_create_review_prompt = raw_coder_review_policy.strip().lower() in {
+            "always",
+            "allowed",
+            "true",
+            "yes",
+        }
+    else:
+        coder_may_create_review_prompt = base.coder_may_create_review_prompt
     mode_fields = _mode_fields_from_config(_get(config, "state", "mode_fields"))
     if not mode_fields:
         mode_fields = base.mode_fields
@@ -1051,6 +1081,8 @@ def profile_from_config(
         reports_discovery=reports_discovery,
         llloom_memory_root=llloom_memory_root,
         llloom_posture_file=llloom_posture_file,
+        context_filename=context_filename,
+        coder_may_create_review_prompt=coder_may_create_review_prompt,
     )
     return profile, tuple(diagnostics)
 
