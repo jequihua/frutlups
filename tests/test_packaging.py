@@ -297,6 +297,16 @@ class PackagingTests(_BuiltArtifactTestCase):
             "py.typed was not included in the built sdist",
         )
 
+    def test_source_declares_complete_mit_license(self) -> None:
+        project = _source_project()
+        self.assertEqual(project["license"], "MIT")
+        self.assertEqual(project["license-files"], ["LICENSE"])
+        license_text = (_PKG_ROOT / "LICENSE").read_text(encoding="utf-8")
+        normalized = " ".join(license_text.split())
+        self.assertTrue(license_text.startswith("MIT License\n\n"))
+        self.assertIn("including without limitation the rights", normalized)
+        self.assertIn("sell copies of the Software", normalized)
+
 
 class DependencyDeclarationTests(unittest.TestCase):
     """The source declaration is the single dependency source of truth."""
@@ -410,6 +420,30 @@ class BuiltMetadataTests(_BuiltArtifactTestCase):
                     for value in _conditional_requirements(values)
                 }
                 self.assertEqual(conditional, {"mypy", "ruff"})
+
+    def test_built_artifacts_carry_mit_expression_and_license_file(self) -> None:
+        for label, metadata in (
+            ("wheel", _wheel_core_metadata()),
+            ("sdist", _sdist_core_metadata()),
+        ):
+            with self.subTest(artifact=label):
+                self.assertEqual(metadata.get("License-Expression"), "MIT")
+                self.assertIn("LICENSE", metadata.get_all("License-File") or [])
+
+        assert _WHEEL is not None
+        with zipfile.ZipFile(_WHEEL) as archive:
+            license_names = [
+                name for name in archive.namelist() if name.endswith("/licenses/LICENSE")
+            ]
+            self.assertEqual(len(license_names), 1)
+            self.assertEqual(
+                archive.read(license_names[0]).decode("utf-8"),
+                (_PKG_ROOT / "LICENSE").read_text(encoding="utf-8"),
+            )
+        self.assertEqual(
+            len([name for name in _sdist_names() if name.endswith("/LICENSE")]),
+            1,
+        )
 
     def test_wheel_contents_preserve_packaging_invariants(self) -> None:
         assert _WHEEL is not None

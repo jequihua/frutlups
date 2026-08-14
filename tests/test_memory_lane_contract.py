@@ -804,7 +804,7 @@ class PurityAndNoWriteTests(unittest.TestCase):
 
 class PublicBoundaryPinsTests(unittest.TestCase):
     def test_version_and_export_count(self) -> None:
-        self.assertEqual(frutlups.__version__, "0.1.2")
+        self.assertEqual(frutlups.__version__, "0.1.3")
         self.assertEqual(len(frutlups.__all__), 152)
 
     def test_eight_cli_verbs(self) -> None:

@@ -1,17 +1,18 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "frutlups"
-version = "0.1.2"
+version = "0.1.3"
 description = "Lightweight artifact-first coding loop orchestrator"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
   { name = "frutlups maintainers" },
 ]
-license = { text = "Proprietary" }
+license = "MIT"
+license-files = ["LICENSE"]
 # PyYAML is the product's sole mandatory runtime dependency and the single
 # accepted YAML semantic engine. The bounded `SafeLoader` boundary in
 # `frutlups._yaml` is the one runtime parse path for layout and metadata; there

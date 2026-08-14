@@ -179,7 +179,11 @@ this package.
 
 ## License and publication
 
-This package's metadata declares a `Proprietary` license. Choosing a license,
-initializing any public remote, tagging, publishing to a package registry, or
-making a release are **human-owner decisions** and are not performed by this
-repository or its tooling. Resolve the license before any public distribution.
+Frutlups is open-source software licensed under the permissive MIT License. It
+may be used, copied, modified, distributed, sublicensed, and sold, including for
+commercial purposes, subject to preserving the copyright and license notice.
+See `LICENSE` for the complete terms.
+
+Tagging, pushing, publishing to a package registry, and creating hosted release
+assets remain explicit human-owner actions; repository tooling does not perform
+them automatically.

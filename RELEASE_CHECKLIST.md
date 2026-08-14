@@ -165,33 +165,18 @@ Confirm the release-facing metadata in `pyproject.toml`:
   `dev` extra is never required for a base install.
 
   Through the accepted M001 baseline `frutlups` genuinely had **no runtime
-  dependencies**; that dated fact is preserved rather than rewritten. The M002
-  candidate retires the posture deliberately so a single bounded `SafeLoader`
-  boundary can own YAML semantics. Until M002 is accepted as a whole, this
-  declaration is part of an unaccepted candidate.
+  dependencies**; that dated fact is preserved rather than rewritten. Accepted
+  M002 deliberately retired that posture so one bounded `SafeLoader` boundary
+  owns YAML semantics.
 
   The dependency propagation is guarded by
   `tests/test_packaging.py::DependencyDeclarationTests`,
   `::BuiltMetadataTests`, and `::IsolatedBaseInstallTests`.
 - `[project.scripts]` exposes the `frutlups` console entry point.
-- `readme`, `authors`, and `license` are present and correct.
-
-**Known packaging cleanup before a public release (deferred):** the current
-`license = { text = "Proprietary" }` TOML table form is deprecated by newer
-setuptools (PEP 639); recent setuptools emits a `SetuptoolsDeprecationWarning`
-noting the table form is scheduled for removal after 2027-02-18. This is **not
-fixed in this slice** on purpose:
-
-- the SPDX-string replacement (`license = "..."`) requires a valid SPDX license
-  expression, and `"Proprietary"` is not a valid SPDX identifier;
-- the SPDX-string form also requires setuptools `>= 77`, above the package's
-  build floor; the pinned dev/build environment here uses setuptools 65.5.0,
-  which does not emit the warning.
-
-Before a public release, a maintainer should decide on the correct license
-expression (a real SPDX identifier, or a license classifier / `license-files`)
-and bump the setuptools floor accordingly, then re-run steps 7–8. Until then the
-table form remains valid and functional.
+- `readme`, `authors`, and license are present and correct. The source declares
+  the SPDX expression `MIT`, lists `LICENSE` under `license-files`, and requires
+  setuptools `>=77` so wheel and sdist metadata carry `License-Expression: MIT`
+  and the complete license file. Confirm both archives contain it.
 
 ## 10. Governance loop closure
 
@@ -220,5 +205,5 @@ passes and a human has approved the release. None of it runs by default here.
 #   .\.venv\Scripts\python.exe -m twine upload dist/*
 ```
 
-Note: `frutlups` is currently `license = "Proprietary"`; confirm distribution and
-index policy before publishing anywhere.
+Frutlups is distributed under the MIT License, including commercial use. Confirm
+the built metadata and bundled `LICENSE` file before publishing anywhere.
