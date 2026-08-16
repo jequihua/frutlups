@@ -198,7 +198,7 @@ class _BadLayoutCase(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# The five mutating CLI forms refuse before any write (text and JSON).
+# The six mutating CLI forms refuse before any write (text and JSON).
 # ---------------------------------------------------------------------------
 
 
@@ -221,6 +221,37 @@ class MutatingCliRefusalTests(_BadLayoutCase):
         root = self._project()
         self._assert_refusal(
             root, ["make-coding-prompt", str(root), "--json"], json_mode=True
+        )
+
+    def test_declare_rework_text(self) -> None:
+        root = self._project()
+        self._assert_refusal(
+            root,
+            [
+                "declare-rework",
+                str(root),
+                "--pass-id",
+                "holistic_pass_001",
+                "--slice",
+                "M001-S01",
+            ],
+            json_mode=False,
+        )
+
+    def test_declare_rework_json(self) -> None:
+        root = self._project()
+        self._assert_refusal(
+            root,
+            [
+                "declare-rework",
+                str(root),
+                "--pass-id",
+                "holistic_pass_001",
+                "--slice",
+                "M001-S01",
+                "--json",
+            ],
+            json_mode=True,
         )
 
     def test_make_review_prompt_text(self) -> None:
@@ -328,6 +359,22 @@ class ReadOnlyFallbackTests(_BadLayoutCase):
         root = self._project()
         self._assert_labeled_read_only(
             root, ["make-coding-prompt", str(root), "--dry-run"], json_mode=False
+        )
+
+    def test_declare_rework_dry_run(self) -> None:
+        root = self._project()
+        self._assert_labeled_read_only(
+            root,
+            [
+                "declare-rework",
+                str(root),
+                "--pass-id",
+                "holistic_pass_001",
+                "--slice",
+                "M001-S01",
+                "--dry-run",
+            ],
+            json_mode=False,
         )
 
     def test_make_review_prompt_dry_run(self) -> None:
@@ -661,12 +708,12 @@ class BoundedTextTests(_BadLayoutCase):
 
 
 # ---------------------------------------------------------------------------
-# Public surface: verbs, exports, JSON key sets all unchanged.
+# Public surface: current verbs plus preserved exports and JSON key sets.
 # ---------------------------------------------------------------------------
 
 
-class UnchangedPublicSurfaceTests(unittest.TestCase):
-    def test_eight_verb_inventory_by_parser_choices(self) -> None:
+class PublicSurfaceTests(unittest.TestCase):
+    def test_nine_verb_inventory_by_parser_choices(self) -> None:
         from frutlups.cli import _build_parser
 
         parser = _build_parser()
@@ -678,6 +725,7 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
         self.assertEqual(
             sorted(subparsers.choices),
             [
+                "declare-rework",
                 "make-coding-prompt",
                 "make-review-prompt",
                 "next",
@@ -689,13 +737,14 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
             ],
         )
 
-    def test_eight_verb_inventory_by_help_text(self) -> None:
+    def test_nine_verb_inventory_by_help_text(self) -> None:
         out = StringIO()
         with redirect_stdout(out):
             with self.assertRaises(SystemExit):
                 main(["--help"])
         text = out.getvalue()
         for verb in (
+            "declare-rework",
             "status",
             "next",
             "orchestrator-plan",

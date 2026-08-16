@@ -11,7 +11,7 @@ boundary summary, not a second API source.
 ## Preserved Public Surface
 
 - Distribution and import name `frutlups`, version `0.1.3`, and Python `>=3.11`.
-- The `frutlups` console entry point and eight top-level CLI verbs.
+- The `frutlups` console entry point and nine top-level CLI verbs.
 - The package `__all__` export set and every resolving public name.
 - Documented dataclass and JSON shapes, including default text and JSON behavior.
 - `py.typed`, source-package discovery, the optional `dev` extra, and installed wheel/sdist behavior.
@@ -32,7 +32,11 @@ contract id `frutlups.memory_mode`, version `"1"`, and the exact fields
 declarations map compatibly to valid mode `none`; malformed or ambiguous
 declarations return `valid: false`, `mode: null`, and fixed diagnostic codes.
 The existing `memory` health block remains separate. `planning_frontier` version
-`"1"`, `loop_resume`, all eight verbs, and non-status command shapes are unchanged.
+`"1"`, `loop_resume`, the prior eight verbs, and their non-status command shapes
+are unchanged. The additive ninth verb, `declare-rework`, writes one append-only
+`frutlups.rework_declaration` version-1 JSON artifact only from a complete
+planning frontier. Its declaration fields are `contract_id`, `contract_version`,
+`declaration_sequence`, `pass_id`, `baseline_prompt_sequence`, and `slice_ids`.
 
 The committed layout config carries two reviewed opt-in closed vocabularies:
 `reports.discovery` (`flat` | `recursive_contained`) and `prompts.pairing`

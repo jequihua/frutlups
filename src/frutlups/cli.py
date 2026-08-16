@@ -44,8 +44,15 @@ from frutlups.project import (
     _layout_mutation_blockers,
     _layout_mutation_refusal_message,
     build_loop_resume_status,
+    build_rework_declaration_plan,
     build_status,
     write_verdict_record,
+)
+from frutlups.rework import (
+    ReworkDeclarationPlan,
+    ReworkDeclarationWriteCommand,
+    ReworkDeclarationWriteResult,
+    write_rework_declaration,
 )
 from frutlups.prompt_template import (
     CodingPromptWriteCommand,
@@ -280,12 +287,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(_format_review_prompt_plan(review_plan, write_result=review_write_result))
             return 0 if review_write_result.wrote else 1
         if args.command == "make-coding-prompt":
-            status = build_status(args.path, layout_config=args.layout_config)
+            status, evidence = _build_status_with_evidence(
+                args.path, layout_config=args.layout_config
+            )
             blockers = _layout_mutation_blockers(status.layout)
             coding_plan = _build_coding_prompt_plan_from_status(
                 status,
                 sequence=args.sequence,
                 slug=args.slug,
+                evidence=evidence,
             )
             if blockers:
                 # M002-S04: the selected-layout authority decision governs even
@@ -337,6 +347,52 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 print(_format_coding_prompt_plan(coding_plan, write_result=coding_write_result))
             return 0 if coding_write_result.wrote else 1
+        if args.command == "declare-rework":
+            rework_plan = build_rework_declaration_plan(
+                args.path,
+                pass_id=args.pass_id,
+                slice_ids=tuple(args.slice_ids),
+                layout_config=args.layout_config,
+            )
+            if rework_plan.mutation_refused:
+                if args.dry_run:
+                    if rework_plan.fallback_label:
+                        print(f"frutlups: {rework_plan.fallback_label}", file=sys.stderr)
+                    for err in rework_plan.errors:
+                        print(f"frutlups: {err}", file=sys.stderr)
+                    if args.json:
+                        print(json.dumps(rework_plan.to_dict(), indent=2, sort_keys=True))
+                    return 0
+                for err in rework_plan.errors:
+                    print(f"frutlups: {err}", file=sys.stderr)
+                if args.json:
+                    print(json.dumps(rework_plan.to_dict(), indent=2, sort_keys=True))
+                return 2
+            if not rework_plan.valid:
+                for err in rework_plan.errors:
+                    print(f"frutlups: {err}", file=sys.stderr)
+                if args.json:
+                    print(json.dumps(rework_plan.to_dict(), indent=2, sort_keys=True))
+                return 1
+            if args.dry_run:
+                if args.json:
+                    print(json.dumps(rework_plan.to_dict(), indent=2, sort_keys=True))
+                else:
+                    print(_format_rework_declaration_plan(rework_plan, None))
+                return 0
+            result = write_rework_declaration(
+                ReworkDeclarationWriteCommand(
+                    project_root=rework_plan.root,
+                    plan=rework_plan,
+                )
+            )
+            payload = rework_plan.to_dict()
+            payload["write_result"] = result.to_dict()
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_format_rework_declaration_plan(rework_plan, result))
+            return 0 if result.wrote else 1
         if args.command == "record-verdict":
             try:
                 layout: ProjectLayout | None = ProjectLayout.discover(
@@ -414,8 +470,9 @@ move work through the cycle:
   -> reviewer verdict -> verdict record -> next slice
 
 Run a command with --help for command-specific options and examples. All
-commands are read-only except make-coding-prompt, make-review-prompt, and
-record-verdict, which write a single repository artifact (and support --dry-run).
+commands are read-only except declare-rework, make-coding-prompt,
+make-review-prompt, and record-verdict, which write a single repository artifact
+(and support --dry-run).
 """
 
 _TOP_EPILOG = """\
@@ -429,6 +486,10 @@ common workflow (PowerShell, from 08_pkg):
   .\\.venv\\Scripts\\python.exe -m frutlups make-coding-prompt .. --dry-run
   .\\.venv\\Scripts\\python.exe -m frutlups make-coding-prompt ..
 
+  # after a completed-roadmap holistic finding, declare bounded slice rework
+  .\\.venv\\Scripts\\python.exe -m frutlups declare-rework .. `
+      --pass-id holistic_pass_001 --slice M003-S03 --slice M006-S01
+
   # after the coder writes the self-report, write the matching review prompt
   .\\.venv\\Scripts\\python.exe -m frutlups make-review-prompt ..
 
@@ -437,7 +498,8 @@ common workflow (PowerShell, from 08_pkg):
   .\\.venv\\Scripts\\python.exe -m frutlups record-verdict .. `
       --review-report ..\\05_governance\\reviews\\<slice>_review_report.md
 
-Add --json to status/next/make-*/record-verdict for machine-readable output.
+Add --json to status/next/declare-rework/make-*/record-verdict for
+machine-readable output.
 """
 
 _STATUS_DESCRIPTION = (
@@ -546,6 +608,24 @@ examples (PowerShell, from 08_pkg):
 
   # replace an existing prompt at a chosen sequence
   .\\.venv\\Scripts\\python.exe -m frutlups make-coding-prompt .. --sequence 72 --overwrite
+"""
+
+_REWORK_DESCRIPTION = (
+    "Write one immutable, versioned declaration that reopens a bounded set of "
+    "already-accepted roadmap slices after a genuinely complete planning "
+    "frontier. Slice identifiers are canonicalized to roadmap order and every "
+    "reopened slice must earn a fresh prompt-linked accepted evidence chain."
+)
+_REWORK_EPILOG = """\
+examples (PowerShell, from 08_pkg):
+
+  # preview the declaration; writes nothing
+  .\\.venv\\Scripts\\python.exe -m frutlups declare-rework .. `
+      --pass-id holistic_pass_001 --slice M003-S03 --slice M006-S01 --dry-run
+
+  # write exactly one append-only declaration artifact
+  .\\.venv\\Scripts\\python.exe -m frutlups declare-rework .. `
+      --pass-id holistic_pass_001 --slice M003-S03 --slice M006-S01
 """
 
 _MRP_DESCRIPTION = (
@@ -769,6 +849,38 @@ def _build_parser() -> argparse.ArgumentParser:
         "--slug", type=str, default=None, help="override the computed prompt slug"
     )
 
+    rework_parser = subparsers.add_parser(
+        "declare-rework",
+        help="reopen accepted slices from a completed planning frontier",
+        description=_REWORK_DESCRIPTION,
+        epilog=_REWORK_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rework_parser.add_argument(
+        "path",
+        nargs="?",
+        default=Path.cwd(),
+        type=Path,
+        help="project root or any path inside it (default: current directory)",
+    )
+    rework_parser.add_argument(
+        "--pass-id",
+        required=True,
+        help="stable lowercase pass identity, such as holistic_pass_001",
+    )
+    rework_parser.add_argument(
+        "--slice",
+        dest="slice_ids",
+        action="append",
+        required=True,
+        metavar="<MNNN-SNN>",
+        help="accepted roadmap slice to reopen; repeat for multiple slices",
+    )
+    rework_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    rework_parser.add_argument(
+        "--dry-run", action="store_true", help="preview the declaration without writing it"
+    )
+
     rv_parser = subparsers.add_parser(
         "record-verdict",
         help="parse a review report verdict and write a governance record",
@@ -809,6 +921,7 @@ def _build_parser() -> argparse.ArgumentParser:
         handoff_parser,
         mrp_parser,
         mcp_parser,
+        rework_parser,
         rv_parser,
     ):
         layout_aware.add_argument(
@@ -820,6 +933,35 @@ def _build_parser() -> argparse.ArgumentParser:
         )
 
     return parser
+
+
+def _format_rework_declaration_plan(
+    plan: ReworkDeclarationPlan,
+    write_result: ReworkDeclarationWriteResult | None,
+) -> str:
+    lines = [f"Project: {plan.root}"]
+    if plan.declaration is not None:
+        declaration = plan.declaration
+        lines.append(f"Pass: {declaration.pass_id}")
+        lines.append(f"Declaration sequence: {declaration.declaration_sequence:03d}")
+        lines.append(f"Prompt baseline: {declaration.baseline_prompt_sequence:03d}")
+        lines.append("Slices: " + ", ".join(declaration.slice_ids))
+    lines.append(f"Target: {plan.target_path or 'unavailable'}")
+    if write_result is None:
+        lines.append(
+            "Would write: yes (dry-run, not written)" if plan.valid else "Would write: no"
+        )
+    elif write_result.wrote:
+        lines.append(f"Written: {write_result.target_path}")
+    else:
+        lines.append("Write failed:")
+        for err in write_result.errors:
+            lines.append(f"  {err}")
+    if plan.errors:
+        lines.append("Plan errors:")
+        for err in plan.errors:
+            lines.append(f"  {err}")
+    return "\n".join(lines)
 
 
 def _format_coding_prompt_plan(

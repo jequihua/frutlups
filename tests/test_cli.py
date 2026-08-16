@@ -52,6 +52,7 @@ class CliHelpTests(unittest.TestCase):
         for command in (
             "status",
             "next",
+            "declare-rework",
             "make-coding-prompt",
             "make-review-prompt",
             "record-verdict",
@@ -82,6 +83,14 @@ class CliHelpTests(unittest.TestCase):
         self.assertIn("--sequence", out)
         self.assertIn("frutlups make-coding-prompt ..", out)
 
+    def test_declare_rework_help(self) -> None:
+        code, out = _help(["declare-rework", "--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("--pass-id", out)
+        self.assertIn("--slice", out)
+        self.assertIn("--dry-run", out)
+        self.assertIn("frutlups declare-rework ..", out)
+
     def test_make_review_prompt_help(self) -> None:
         code, out = _help(["make-review-prompt", "--help"])
         self.assertEqual(code, 0)
@@ -111,6 +120,7 @@ class CliHelpTests(unittest.TestCase):
             ["--help"],
             ["status", "--help"],
             ["next", "--help"],
+            ["declare-rework", "--help"],
             ["make-coding-prompt", "--help"],
             ["make-review-prompt", "--help"],
             ["record-verdict", "--help"],

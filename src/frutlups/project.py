@@ -71,6 +71,19 @@ from frutlups.review_report import (
     ReviewVerdict,
     parse_review_report_verdict,
 )
+from frutlups.rework import (
+    MAX_REWORK_DECLARATIONS,
+    MAX_REWORK_PASS_ID,
+    MAX_REWORK_PROMPT_SEQUENCE,
+    MAX_REWORK_SLICES,
+    REWORK_DECLARATION_COUNT_EXHAUSTED,
+    ReworkDeclaration,
+    ReworkDeclarationDiagnostic,
+    ReworkDeclarationPlan,
+    declaration_path,
+    load_rework_declarations,
+    render_rework_declaration,
+)
 from frutlups.self_report import (
     SelfReportLocationCommand,
     SelfReportValidationCommand,
@@ -1201,10 +1214,40 @@ def _build_status_with_evidence(
     selected_profile = (
         layout.loaded.profile if layout.loaded is not None else legacy_profile()
     )
-    evidence = _collect_acceptance_evidence(layout.root, selected_profile)
+    evidence = _with_rework_declarations(
+        layout.root,
+        _collect_acceptance_evidence(layout.root, selected_profile),
+    )
     accepted_slice_ids = evidence.accepted_slice_ids
+    prompt_artifacts = inventory_prompts(paths.prompts)
+    rework = _resolve_rework(
+        layout.root,
+        slices,
+        accepted_slice_ids,
+        prompt_artifacts,
+        selected_profile,
+        evidence,
+    )
+    for code, message in rework.diagnostics:
+        diagnostics.append(
+            Diagnostic(
+                code=code,
+                severity=DiagnosticSeverity.ERROR,
+                message=message,
+            )
+        )
     next_slice: RoadmapSlice | None = None
-    if next_milestone is not None and detailed_roadmap is not None:
+    if rework.pending_slice is not None:
+        next_slice = rework.pending_slice
+        next_milestone = next(
+            (
+                milestone
+                for milestone in milestones
+                if milestone.milestone_id.upper() == next_slice.milestone_id.upper()
+            ),
+            None,
+        )
+    elif not rework.diagnostics and next_milestone is not None and detailed_roadmap is not None:
         target = next_milestone.milestone_id.upper()
         milestone_slices = [slc for slc in slices if slc.milestone_id.upper() == target]
         if not milestone_slices:
@@ -1235,7 +1278,6 @@ def _build_status_with_evidence(
                     )
                 )
 
-    prompt_artifacts = inventory_prompts(paths.prompts)
     health_profile = layout.loaded.profile if layout.loaded is not None else None
     status = ProjectStatus(
         root=layout.root,
@@ -1617,9 +1659,15 @@ def build_coding_prompt_plan(
     fails. Never raises for normal frontier states.
     """
 
-    status = build_status(start, memory_runner=memory_runner, layout_config=layout_config)
+    status, evidence = _build_status_with_evidence(
+        start, memory_runner=memory_runner, layout_config=layout_config
+    )
     return _build_coding_prompt_plan_from_status(
-        status, sequence=sequence, slug=slug, memory_runner=memory_runner
+        status,
+        sequence=sequence,
+        slug=slug,
+        memory_runner=memory_runner,
+        evidence=evidence,
     )
 
 
@@ -1668,6 +1716,7 @@ def _build_coding_prompt_plan_from_status(
     sequence: int | None = None,
     slug: str | None = None,
     memory_runner: MemoryCommandRunner | None = None,
+    evidence: "_AcceptanceEvidence | None" = None,
 ) -> CodingPromptPlan:
     """Build the coding-prompt plan from an already-built status (M002-S04).
 
@@ -1678,6 +1727,20 @@ def _build_coding_prompt_plan_from_status(
 
     frontier = _build_frontier_from_status(status)
     profile = status.layout.profile if status.layout is not None else legacy_profile()
+
+    if evidence is None:
+        evidence = _with_rework_declarations(
+            status.root,
+            _collect_acceptance_evidence(status.root, profile),
+        )
+    rework = _resolve_rework(
+        status.root,
+        status.slices,
+        status.accepted_slice_ids,
+        status.prompt_artifacts,
+        profile,
+        evidence,
+    )
 
     errors: list[str] = []
 
@@ -1705,8 +1768,20 @@ def _build_coding_prompt_plan_from_status(
     elif sequence > MAX_PROMPT_SEQUENCE:
         errors.append(f"sequence must be at most {MAX_PROMPT_SEQUENCE}")
 
+    declaration = rework.active_declaration
+    if declaration is not None and sequence is not None:
+        if sequence <= declaration.baseline_prompt_sequence:
+            errors.append(
+                "rework coding-prompt sequence must be newer than the declaration baseline"
+            )
+
     if slug is None:
         slug = _derive_slug(inferred_slice.slice_id, inferred_slice.title)
+        if declaration is not None and sequence is not None:
+            slug += (
+                f"_rework_{declaration.declaration_sequence:03d}_"
+                f"{declaration.pass_id}_{sequence:03d}"
+            )
 
     if not isinstance(slug, str) or not slug.strip():
         errors.append("slug must be a non-empty string")
@@ -1734,9 +1809,13 @@ def _build_coding_prompt_plan_from_status(
 
     parts = slice_id.replace("-", "_").lower()
     sanitized_title = re.sub(r"[^a-z0-9]+", "_", inferred_slice.title.lower()).strip("_")
-    self_report_path = (
-        f"{profile.reviews_dir}/{parts}_{sanitized_title}{profile.self_report_suffix}"
-    )
+    evidence_stem = f"{parts}_{sanitized_title}"
+    if declaration is not None:
+        evidence_stem += (
+            f"_rework_{declaration.declaration_sequence:03d}_"
+            f"{declaration.pass_id}_{sequence:03d}"
+        )
+    self_report_path = f"{profile.reviews_dir}/{evidence_stem}{profile.self_report_suffix}"
 
     is_memory_update = frontier.slice_kind == SliceKind.MEMORY_UPDATE
 
@@ -1752,7 +1831,16 @@ def _build_coding_prompt_plan_from_status(
             role_instructions += (
                 "\n\nMilestone objective:\n" + prompt_fields.objective
             )
+        if declaration is not None:
+            role_instructions += (
+                "\n\nThis is accepted-slice rework for pass "
+                f"`{declaration.pass_id}`. Re-audit this slice's historical "
+                "accepted evidence and produce a fresh implementation, self-report, "
+                "independent review, and verdict record."
+            )
         required_reading = _project_required_reading(status, profile, prompt_fields)
+        if declaration is not None and declaration.path not in required_reading:
+            required_reading = required_reading + (declaration.path,)
         scope_paths = prompt_fields.active_workspaces or ("08_pkg/",)
         non_goals = prompt_fields.non_goals or (
             "Do not implement future milestones or unrelated behavior.",
@@ -1782,6 +1870,12 @@ def _build_coding_prompt_plan_from_status(
             "limited to the standard library plus already declared "
             "runtime dependencies."
         )
+        if declaration is not None:
+            role_instructions += (
+                "\n\nThis is accepted-slice rework for pass "
+                f"`{declaration.pass_id}`. Re-audit the historical accepted "
+                "evidence and produce a fresh prompt-linked evidence chain."
+            )
         required_reading = (
             "CLAUDE.md",
             "README.md",
@@ -1790,6 +1884,8 @@ def _build_coding_prompt_plan_from_status(
             "03_experiments/active_roadmap_frutlups.md",
             "06_infra/architecture.md",
         )
+        if declaration is not None:
+            required_reading += (declaration.path,)
         scope_paths = ("08_pkg/",)
         non_goals = (
             "Do not implement future milestones or unrelated behavior.",
@@ -2160,6 +2256,21 @@ class _AcceptanceEvidence:
     contradictions: tuple[_VerdictRecordContradiction, ...]
     authority_defects: tuple[_AuthorityDefect, ...] = ()
     closure_receipts: tuple[_ClosureReceipt, ...] = ()
+    rework_declarations: tuple[ReworkDeclaration, ...] = ()
+    rework_diagnostics: tuple[ReworkDeclarationDiagnostic, ...] = ()
+
+
+def _with_rework_declarations(root: Path, evidence: _AcceptanceEvidence) -> _AcceptanceEvidence:
+    """Attach one bounded declaration inventory to an acceptance snapshot."""
+
+    inventory = load_rework_declarations(root)
+    if not inventory.declarations and not inventory.diagnostics:
+        return evidence
+    return replace(
+        evidence,
+        rework_declarations=inventory.declarations,
+        rework_diagnostics=inventory.diagnostics,
+    )
 
 
 def _slice_artifact_re(suffix: str) -> "re.Pattern[str]":
@@ -3797,6 +3908,225 @@ def _parse_coding_prompt_meta(
     )
 
 
+@dataclass(frozen=True)
+class _ReworkResolution:
+    """Resolved append-only rework state for one planning snapshot."""
+
+    active_declaration: ReworkDeclaration | None = None
+    pending_slice: RoadmapSlice | None = None
+    completed_slice_ids: tuple[str, ...] = ()
+    diagnostics: tuple[tuple[str, str], ...] = ()
+
+
+def _rework_self_report_valid(
+    root: Path,
+    profile: LayoutProfile,
+    meta: CodingPromptMeta,
+) -> bool:
+    """Require the prompt-linked rework self-report to satisfy the live schema."""
+
+    if not meta.valid or not meta.self_report_path:
+        return False
+    stub = CodingPromptTemplate(
+        sequence=meta.sequence,
+        milestone_id=meta.milestone_id or "UNKNOWN",
+        slice_id=meta.slice_id or "UNKNOWN",
+        slug=meta.slug or "unknown",
+        title=meta.title or "unknown",
+        role_instructions="coder",
+        required_reading=("CLAUDE.md",),
+        scope_paths=("08_pkg/",),
+        non_goals=(),
+        definition_of_done=("pass tests",),
+        verification_commands=("python -m unittest",),
+        self_report_path=meta.self_report_path,
+    )
+    validation = validate_expected_self_report(
+        SelfReportValidationCommand(
+            location=SelfReportLocationCommand(project_root=root, template=stub),
+            schema=self_report_schema_for_profile(profile),
+        )
+    )
+    return validation.valid
+
+
+def _paired_review_for_rework(
+    root: Path,
+    profile: LayoutProfile,
+    prompt_artifacts: tuple[PromptArtifact, ...],
+    coding_artifact: PromptArtifact,
+    meta: CodingPromptMeta,
+) -> PromptArtifact | None:
+    """Return the one independently paired review prompt, or ``None``."""
+
+    if profile.prompt_pairing == "workflow_metadata":
+        paired, ambiguous = _select_paired_review_prompt(
+            coding_artifact,
+            meta.slice_id,
+            prompt_artifacts,
+            root,
+            profile,
+        )
+        return None if ambiguous else paired
+    matches = [
+        item
+        for item in prompt_artifacts
+        if item.kind == PromptKind.REVIEW and item.sequence == coding_artifact.sequence
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _rework_slice_has_fresh_acceptance(
+    root: Path,
+    profile: LayoutProfile,
+    declaration: ReworkDeclaration,
+    slice_id: str,
+    prompt_artifacts: tuple[PromptArtifact, ...],
+    evidence: _AcceptanceEvidence,
+    upper_prompt_sequence: int | None = None,
+) -> bool:
+    """Whether one declared slice has a complete post-declaration evidence chain."""
+
+    candidates: list[tuple[int, PromptArtifact, CodingPromptMeta]] = []
+    for artifact in prompt_artifacts:
+        if artifact.kind != PromptKind.CODING or artifact.sequence is None:
+            continue
+        if artifact.sequence <= declaration.baseline_prompt_sequence:
+            continue
+        if upper_prompt_sequence is not None and artifact.sequence > upper_prompt_sequence:
+            continue
+        meta = _parse_coding_prompt_meta(artifact, root, profile)
+        if meta.slice_id.upper() == slice_id.upper():
+            candidates.append((artifact.sequence, artifact, meta))
+    if not candidates:
+        return False
+    _sequence, coding_artifact, meta = max(candidates, key=lambda item: item[0])
+    marker = (
+        f"_rework_{declaration.declaration_sequence:03d}_"
+        f"{declaration.pass_id}_{coding_artifact.sequence:03d}"
+    )
+    if marker not in meta.self_report_path or marker not in meta.review_output_path:
+        return False
+    if not _rework_self_report_valid(root, profile, meta):
+        return False
+    paired = _paired_review_for_rework(
+        root, profile, prompt_artifacts, coding_artifact, meta
+    )
+    if paired is None:
+        return False
+    paired_path = root / profile.review_prompt_dir / paired.filename
+    if _review_output_path_from_prompt(paired_path) != meta.review_output_path:
+        return False
+    return (
+        meta.review_output_path in evidence.pass_reports
+        and meta.review_output_path not in evidence.unrecorded_pass_reports
+    )
+
+
+def _resolve_rework(
+    root: Path,
+    slices: tuple[RoadmapSlice, ...],
+    accepted_slice_ids: tuple[str, ...],
+    prompt_artifacts: tuple[PromptArtifact, ...],
+    profile: LayoutProfile,
+    evidence: _AcceptanceEvidence,
+) -> _ReworkResolution:
+    """Select the earliest unresolved declared slice, or a typed defect."""
+
+    if evidence.rework_diagnostics:
+        return _ReworkResolution(
+            diagnostics=tuple(
+                (item.code, item.message) for item in evidence.rework_diagnostics
+            )
+        )
+    if not evidence.rework_declarations:
+        return _ReworkResolution()
+    roadmap_by_id = {item.slice_id.upper(): item for item in slices}
+    roadmap_order = tuple(item.slice_id.upper() for item in slices)
+    accepted = {item.upper() for item in accepted_slice_ids}
+    completed_all: list[str] = []
+    declarations = evidence.rework_declarations
+    for index, declaration in enumerate(declarations):
+        if declaration.baseline_prompt_sequence >= MAX_REWORK_PROMPT_SEQUENCE:
+            return _ReworkResolution(
+                diagnostics=(
+                    (
+                        "rework_declaration_prompt_space_exhausted",
+                        "rework declaration cannot produce a fresh prompt after sequence 999",
+                    ),
+                )
+            )
+        missing = [item for item in declaration.slice_ids if item not in roadmap_by_id]
+        if missing:
+            return _ReworkResolution(
+                diagnostics=(
+                    (
+                        "rework_declaration_slice_unknown",
+                        "rework declaration names a slice absent from the selected roadmap",
+                    ),
+                )
+            )
+        unaccepted = [item for item in declaration.slice_ids if item not in accepted]
+        if unaccepted:
+            return _ReworkResolution(
+                diagnostics=(
+                    (
+                        "rework_declaration_slice_unaccepted",
+                        "rework declaration names a slice without historical accepted evidence",
+                    ),
+                )
+            )
+        declared = set(declaration.slice_ids)
+        canonical = tuple(item for item in roadmap_order if item in declared)
+        if declaration.slice_ids != canonical:
+            return _ReworkResolution(
+                diagnostics=(
+                    (
+                        "rework_declaration_order_invalid",
+                        "slice_ids must follow the selected detailed-roadmap order",
+                    ),
+                )
+            )
+        completed: list[str] = []
+        pending: RoadmapSlice | None = None
+        upper_prompt_sequence = (
+            declarations[index + 1].baseline_prompt_sequence
+            if index + 1 < len(declarations)
+            else None
+        )
+        for slice_id in declaration.slice_ids:
+            if _rework_slice_has_fresh_acceptance(
+                root,
+                profile,
+                declaration,
+                slice_id,
+                prompt_artifacts,
+                evidence,
+                upper_prompt_sequence,
+            ):
+                completed.append(slice_id)
+                continue
+            pending = roadmap_by_id[slice_id]
+            break
+        completed_all.extend(completed)
+        if pending is not None:
+            if index + 1 < len(declarations):
+                return _ReworkResolution(
+                    diagnostics=(
+                        (
+                            "rework_declaration_overlap_invalid",
+                            "a later rework declaration exists before the prior pass is accepted",
+                        ),
+                    )
+                )
+            return _ReworkResolution(
+                active_declaration=declaration,
+                pending_slice=pending,
+                completed_slice_ids=tuple(completed_all),
+            )
+    return _ReworkResolution(completed_slice_ids=tuple(completed_all))
+
+
 def _make_invalid_review_plan(
     frontier: LoopFrontier,
     sequence: int | None,
@@ -4395,7 +4725,10 @@ def _build_verdict_record_plan_from_profile(
     slices = parse_slices(detailed_roadmap) if detailed_roadmap is not None else ()
     # M003-S05: accepted IDs come from the selected profile's typed evidence.
     if evidence is None:
-        evidence = _collect_acceptance_evidence(root, profile)
+        evidence = _with_rework_declarations(
+            root,
+            _collect_acceptance_evidence(root, profile),
+        )
     accepted_slice_ids = evidence.accepted_slice_ids
 
     # Locate the reviewed slice in the roadmap
@@ -4685,7 +5018,10 @@ def _compute_loop_resume(
     # deterministic repo-relative record path wins; the rest are reported only
     # through bounded deterministic diagnostics.
     if evidence is None:
-        evidence = _collect_acceptance_evidence(root, profile)
+        evidence = _with_rework_declarations(
+            root,
+            _collect_acceptance_evidence(root, profile),
+        )
     if evidence_out is not None:
         evidence_out.append(evidence)
     if evidence.authority_defects:
@@ -4740,6 +5076,20 @@ def _compute_loop_resume(
             diagnostics=tuple(contradiction_diagnostics),
         )
 
+    # Resolve declarations only after higher-priority acceptance authority
+    # defects and contradictions have failed closed. This preserves the rule
+    # that hostile or escaped authority state wins before any ordinary artifact
+    # routing reads are attempted.
+    rework = _resolve_rework(
+        root,
+        slices,
+        evidence.accepted_slice_ids,
+        prompt_artifacts,
+        profile,
+        evidence,
+    )
+    active_rework = rework.active_declaration
+
     # Pre-check: scan for pass-verdict review reports that have no verdict record.
     # The accepted-slice scan counts pass reports as accepted and advances the frontier
     # before _compute_loop_resume can require their verdict record. This scan catches
@@ -4770,7 +5120,7 @@ def _compute_loop_resume(
         # was accepted independently of this report; everything else still
         # surfaces record_verdict.
         if (
-            inferred_slice is None
+            (inferred_slice is None or active_rework is not None)
             and _is_terminal_closure_review_report(report_name)
             and _is_slice_accepted_by_nonterminal_evidence(evidence, report_re, rev_slice_id)
         ):
@@ -4820,7 +5170,7 @@ def _compute_loop_resume(
     # (handled per-slice below) is unchanged; bare review prompts that declare no
     # output location are ignored.
     review_prompt_dir = root / "prompts" / "for_review_agent"
-    if review_prompt_dir.is_dir():
+    if review_prompt_dir.is_dir() and active_rework is None:
         accepted_for_review = evidence.accepted_slice_ids
         for review_prompt in sorted(review_prompt_dir.glob("*.md")):
             report_rel = _review_output_path_from_prompt(review_prompt)
@@ -4863,6 +5213,14 @@ def _compute_loop_resume(
     coding_metas: list[tuple[PromptArtifact, CodingPromptMeta]] = []
     for artifact in prompt_artifacts:
         if artifact.kind != PromptKind.CODING:
+            continue
+        if (
+            active_rework is not None
+            and (
+                artifact.sequence is None
+                or artifact.sequence <= active_rework.baseline_prompt_sequence
+            )
+        ):
             continue
         meta = _parse_coding_prompt_meta(artifact, root, profile)
         if meta.slice_id.upper() == slice_id_upper:
@@ -5112,6 +5470,27 @@ def _compute_loop_resume(
     # channel so the runner policy never reparses the report.
     if verdict_out is not None:
         verdict_out.append(rr_verdict)
+
+    # A rework ``needs_work`` report is durable negative evidence, not an
+    # acceptance receipt. Start a new uniquely linked coding attempt without
+    # recording a verdict artifact: the accepted-evidence contract deliberately
+    # treats records citing non-pass reports as contradictory state.
+    if active_rework is not None and rr_verdict == ReviewVerdict.NEEDS_WORK:
+        return _status(
+            LoopResumeStep.MAKE_CODING_PROMPT,
+            (
+                f"rework review for {frontier_slice_id} found needs_work; "
+                "create a fresh corrective coding prompt"
+            ),
+            "python -m frutlups make-coding-prompt <project>",
+            frontier_slice_id=frontier_slice_id,
+            frontier_slice_title=frontier_slice_title,
+            coding_prompt_path=coding_prompt_path,
+            self_report_path=self_report_path,
+            review_prompt_path=review_prompt_path,
+            review_report_path=review_report_path,
+            diagnostics=tuple(diagnostics),
+        )
 
     # Check verdict record
     verdict_record_abs = root / verdict_record_path if verdict_record_path else None
@@ -5461,6 +5840,16 @@ def _compute_planning_frontier(
             PlanningFrontierOutcome.INVALID,
             [f"ambiguous roadmap selection: {code}" for code in ambiguous_codes],
         )
+    rework_codes = [
+        diag.code
+        for diag in status.diagnostics
+        if diag.code.startswith("rework_declaration_")
+    ]
+    if rework_codes:
+        return _frontier_result(
+            PlanningFrontierOutcome.INVALID,
+            [f"invalid rework declaration state: {code}" for code in rework_codes],
+        )
 
     # Decision 6 resolution 5: a block requires both a safe citation and a
     # named owner; a partially specified block is itself invalid.
@@ -5535,4 +5924,130 @@ def _compute_planning_frontier(
     return _frontier_result(
         PlanningFrontierOutcome.INVALID,
         ["unrecognized loop-resume state"],
+    )
+
+
+def build_rework_declaration_plan(
+    start: Path | str,
+    *,
+    pass_id: str,
+    slice_ids: tuple[str, ...],
+    layout_config: Path | str | None = None,
+) -> ReworkDeclarationPlan:
+    """Plan one bounded append-only accepted-slice rework declaration.
+
+    The writer is available only from a genuinely ``complete`` planning
+    frontier.  It snapshots the current maximum prompt sequence, validates
+    every requested identifier against the selected roadmap and historical
+    accepted evidence, and canonicalizes the worklist to roadmap order.
+    """
+
+    status, evidence = _build_status_with_evidence(
+        start, layout_config=layout_config
+    )
+    errors: list[str] = []
+    blockers = _layout_mutation_blockers(status.layout)
+    if blockers:
+        errors.append(_layout_mutation_refusal_message(blockers))
+
+    resume, verdict, used_evidence = _loop_resume_with_verdict_and_evidence(
+        status, evidence=evidence
+    )
+    planning = _compute_planning_frontier(
+        status,
+        resume,
+        verdict,
+        used_evidence,
+    )
+    if planning.outcome != PlanningFrontierOutcome.COMPLETE.value:
+        errors.append("rework declaration requires a complete planning frontier")
+
+    normalized_pass = pass_id.strip() if isinstance(pass_id, str) else ""
+    if (
+        not normalized_pass
+        or len(normalized_pass) > MAX_REWORK_PASS_ID
+        or re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", normalized_pass) is None
+    ):
+        errors.append("pass_id must match [a-z][a-z0-9_-]{0,63}")
+
+    raw_slices = tuple(slice_ids) if isinstance(slice_ids, (tuple, list)) else ()
+    if not 1 <= len(raw_slices) <= MAX_REWORK_SLICES:
+        errors.append(f"slice_ids must contain 1 through {MAX_REWORK_SLICES} identifiers")
+    normalized_slices: list[str] = []
+    for value in raw_slices:
+        if not isinstance(value, str) or re.fullmatch(
+            r"M\d+-S\d+", value.strip(), re.IGNORECASE
+        ) is None:
+            errors.append("every slice_id must be an M<number>-S<number> identifier")
+            continue
+        normalized_slices.append(value.strip().upper())
+    if len(set(normalized_slices)) != len(normalized_slices):
+        errors.append("slice_ids must not contain duplicates")
+
+    requested = set(normalized_slices)
+    roadmap_ids = tuple(item.slice_id.upper() for item in status.slices)
+    unknown = requested.difference(roadmap_ids)
+    if unknown:
+        errors.append("every rework slice must exist in the selected detailed roadmap")
+    accepted = {item.upper() for item in status.accepted_slice_ids}
+    if requested.difference(accepted):
+        errors.append("every rework slice must already have accepted historical evidence")
+    canonical_slices = tuple(item for item in roadmap_ids if item in requested)
+
+    if normalized_pass in {
+        item.pass_id for item in evidence.rework_declarations
+    }:
+        errors.append("pass_id already exists in the append-only declaration history")
+    declaration_sequence = len(evidence.rework_declarations) + 1
+    # ``MAX_REWORK_DECLARATIONS`` is the single count authority shared with the
+    # reader and the write boundary.  Refusing here keeps the planner from ever
+    # proposing a declaration the reader would reject on the next read.  This is
+    # the declaration-count space only; the prompt-sequence bound below stays
+    # independent.
+    if declaration_sequence > MAX_REWORK_DECLARATIONS:
+        errors.append(REWORK_DECLARATION_COUNT_EXHAUSTED)
+    baseline = max(
+        (
+            item.sequence
+            for item in status.prompt_artifacts
+            if isinstance(item.sequence, int)
+        ),
+        default=0,
+    )
+    if baseline >= MAX_REWORK_PROMPT_SEQUENCE:
+        errors.append("prompt sequence space is exhausted; no fresh rework prompt can be written")
+
+    target = (
+        declaration_path(declaration_sequence, normalized_pass)
+        if normalized_pass and declaration_sequence <= MAX_REWORK_DECLARATIONS
+        else ""
+    )
+    if errors:
+        return ReworkDeclarationPlan(
+            root=status.root,
+            valid=False,
+            errors=tuple(dict.fromkeys(errors)),
+            declaration=None,
+            target_path=target,
+            content="",
+            mutation_refused=bool(blockers),
+            fallback_label=(
+                _layout_fallback_label_message(blockers) if blockers else ""
+            ),
+        )
+
+    declaration = ReworkDeclaration(
+        declaration_sequence=declaration_sequence,
+        pass_id=normalized_pass,
+        baseline_prompt_sequence=baseline,
+        slice_ids=canonical_slices,
+        path=target,
+    )
+    return ReworkDeclarationPlan(
+        root=status.root,
+        valid=True,
+        errors=(),
+        declaration=declaration,
+        target_path=target,
+        content=render_rework_declaration(declaration),
     )

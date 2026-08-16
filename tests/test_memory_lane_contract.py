@@ -798,16 +798,16 @@ class PurityAndNoWriteTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Public / planning / package boundary pins (unchanged by this correction)
+# Public / planning / package boundary pins
 # ---------------------------------------------------------------------------
 
 
 class PublicBoundaryPinsTests(unittest.TestCase):
     def test_version_and_export_count(self) -> None:
-        self.assertEqual(frutlups.__version__, "0.1.3")
+        self.assertEqual(frutlups.__version__, "0.1.4")
         self.assertEqual(len(frutlups.__all__), 152)
 
-    def test_eight_cli_verbs(self) -> None:
+    def test_nine_cli_verbs(self) -> None:
         import argparse
 
         parser = cli._build_parser()
@@ -819,6 +819,7 @@ class PublicBoundaryPinsTests(unittest.TestCase):
         self.assertEqual(
             verbs,
             {
+                "declare-rework",
                 "status",
                 "next",
                 "orchestrator-plan",

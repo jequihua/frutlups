@@ -477,10 +477,10 @@ def _exec_make_coding_prompt(
 
     M002-S04: the plan is built from the same already selected status/layout
     snapshot that produced the guarded plan and the authority decision.
-    ``evidence`` is accepted for handler-signature uniformity (Prompt 031).
+    ``evidence`` preserves the invocation's single acceptance snapshot.
     """
 
-    plan = _build_coding_prompt_plan_from_status(status)
+    plan = _build_coding_prompt_plan_from_status(status, evidence=evidence)
     if not plan.valid:
         return _ExecutionOutcome(
             attempted=False,

@@ -714,7 +714,7 @@ class HostileDataTests(unittest.TestCase):
 
 
 class PublicSurfaceTests(unittest.TestCase):
-    def test_exports_and_verbs_unchanged(self) -> None:
+    def test_exports_and_current_verbs(self) -> None:
         self.assertEqual(len(frutlups.__all__), 152)
         self.assertFalse(hasattr(frutlups, "render_configured_scaffold"))
         import argparse
@@ -726,7 +726,7 @@ class PublicSurfaceTests(unittest.TestCase):
             for action in _build_parser()._actions
             if isinstance(action, argparse._SubParsersAction)
         )
-        self.assertEqual(len(subparsers.choices), 8)
+        self.assertEqual(len(subparsers.choices), 9)
 
 
 # ---------------------------------------------------------------------------
@@ -1886,7 +1886,7 @@ class HeadingPurityAndSurfaceTests(unittest.TestCase):
         self.assertEqual(second.render.content, third.render.content)
         self.assertEqual(scaffold_bytes_after, scaffold_bytes)
 
-    def test_public_surface_unchanged(self) -> None:
+    def test_current_public_surface(self) -> None:
         self.assertEqual(len(frutlups.__all__), 152)
         import argparse
 
@@ -1897,7 +1897,7 @@ class HeadingPurityAndSurfaceTests(unittest.TestCase):
             for action in _build_parser()._actions
             if isinstance(action, argparse._SubParsersAction)
         )
-        self.assertEqual(len(subparsers.choices), 8)
+        self.assertEqual(len(subparsers.choices), 9)
 
 
 # ---------------------------------------------------------------------------

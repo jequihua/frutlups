@@ -77,7 +77,7 @@ fails clearly rather than degrading behavior.
 
 ## CLI
 
-`frutlups` exposes eight commands. Run any command with `--help` for its options;
+`frutlups` exposes nine commands. Run any command with `--help` for its options;
 all accept `--json`.
 
 ```powershell
@@ -93,6 +93,7 @@ python -m frutlups orchestrator-plan <project> --json
 python -m frutlups orchestrator-handoff <project> --json
 
 # governed single-artifact writes (preview with --dry-run first)
+python -m frutlups declare-rework <project> --pass-id holistic_pass_001 --slice M003-S03 --dry-run
 python -m frutlups make-coding-prompt <project> --dry-run
 python -m frutlups make-coding-prompt <project>
 python -m frutlups make-review-prompt <project>
@@ -104,6 +105,8 @@ python -m frutlups orchestrator-run <project> --once --dry-run
 
 Commands:
 
+- `declare-rework` — append a bounded declaration reopening accepted slices
+  after a complete planning frontier.
 - `status` — read-only project and loop status.
 - `next` — the artifact-inferred next slice (read-only).
 - `orchestrator-plan` — the read-only versioned planning frontier and resume plan.
@@ -115,7 +118,10 @@ Commands:
 
 `status`, `next`, `orchestrator-plan`, and `orchestrator-handoff` never write. The
 writing verbs produce a single repository artifact and accept `--dry-run` to
-preview without writing.
+preview without writing. `declare-rework` stores immutable version-1 JSON under
+`05_governance/rework_declarations/`; reopened slices retain their historical
+acceptance and require a fresh prompt-linked self-report, independent review,
+passing report, and verdict record before terminal completion is restored.
 
 Here `<project>` is the repository whose loop you are governing. When you run the
 commands from inside a package workspace that is itself a subdirectory of the
@@ -151,7 +157,7 @@ loop calls automatically.
 
 ## Public surface and compatibility
 
-The stable public surface — the distribution/import name, version, the eight CLI
+The stable public surface — the distribution/import name, version, the nine CLI
 verbs, the package `__all__` export set, documented dataclass and JSON shapes, and
 `py.typed` — is described in [`public_api_contract.md`](public_api_contract.md).
 Changes to it require reviewed compatibility evidence.

@@ -1461,7 +1461,7 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
             self.assertNotIn(name, frutlups.__all__)
             self.assertFalse(hasattr(frutlups, name), name)
 
-    def test_cli_verb_inventory_unchanged(self) -> None:
+    def test_current_cli_verb_inventory(self) -> None:
         from frutlups.cli import _build_parser
 
         parser = _build_parser()
@@ -1473,6 +1473,7 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
         self.assertEqual(
             sorted(subparsers.choices),
             [
+                "declare-rework",
                 "make-coding-prompt",
                 "make-review-prompt",
                 "next",
