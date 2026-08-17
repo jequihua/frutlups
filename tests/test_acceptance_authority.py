@@ -2224,16 +2224,24 @@ class HandoffSnapshotTests(unittest.TestCase):
         # rendered handoff: only the first snapshot governs.
         import frutlups.project as project_module
 
-        accepted = self._accepted_evidence()
-        defect = self._defect_evidence()
         for name, builder in self._builders():
-            for first, second, expect_defect_resume in (
-                (accepted, defect, False),
-                (defect, accepted, True),
+            for first_defect, expect_defect_resume in (
+                (False, False),
+                (True, True),
             ):
-                with self.subTest(builder=name, first_defect=bool(first.authority_defects)):
+                with self.subTest(builder=name, first_defect=first_defect):
                     with TemporaryDirectory() as tmp:
                         root = self._project(tmp)
+                        first = (
+                            self._defect_evidence()
+                            if first_defect
+                            else self._accepted_evidence()
+                        )
+                        second = (
+                            self._accepted_evidence()
+                            if first_defect
+                            else self._defect_evidence()
+                        )
                         with mock.patch.object(
                             project_module,
                             "_collect_acceptance_evidence",

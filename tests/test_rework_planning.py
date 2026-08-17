@@ -7,18 +7,36 @@ import json
 import shutil
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import FrozenInstanceError
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import get_type_hints
 from unittest import mock
 
+from test_configured_prompt_scaffold import (
+    _SR_HEADINGS,
+    _make_v2_review_project,
+    _write_scaffolds,
+)
+from test_layout import _review_template as _legacy_review_template
+from test_make_review_prompt import _minimal_self_report
+from test_planning_frontier import _completed_project, _fresh_project
+from test_resumable_status import _write_review_report, _write_self_report
+
+import frutlups
+import frutlups.project as project_module
 from frutlups.cli import main
 from frutlups.gate import build_planning_frontier_status
 from frutlups.project import (
+    PLANNING_FRONTIER_CONTRACT_VERSION,
+    _review_output_path_from_prompt,
     build_loop_resume_status,
+    build_review_prompt_plan,
     build_rework_declaration_plan,
     build_status,
 )
+from frutlups.review_prompt_template import render_review_prompt
 from frutlups.rework import (
     MAX_REWORK_DECLARATIONS,
     REWORK_DECLARATION_COUNT_EXHAUSTED,
@@ -30,10 +48,6 @@ from frutlups.rework import (
     render_rework_declaration,
     write_rework_declaration,
 )
-
-from test_make_review_prompt import _minimal_self_report
-from test_planning_frontier import _completed_project, _fresh_project
-from test_resumable_status import _write_review_report, _write_self_report
 
 
 def _write_declaration(
@@ -132,6 +146,94 @@ def _complete_fresh_chain(root: Path, verdict: str = "pass") -> str:
     if code != 0:
         raise AssertionError(err or out)
     return marker
+
+
+def _configured_self_report() -> str:
+    """A minimal valid report for the selected template-v2 schema."""
+
+    parts = [
+        f"{heading}\n\n"
+        + ("- 08_pkg/src/frutlups/x.py\n" if heading == "Files Changed:" else "x\n")
+        for heading in _SR_HEADINGS
+    ]
+    return "# Coder Self-Report\n\n" + "\n".join(parts)
+
+
+def _configured_rework_project(root: Path) -> None:
+    """Completed history plus the configured shape and a sequence-014 tail."""
+
+    _completed_project(root, closure=True)
+    _write_scaffolds(root)
+    (root / "frutlups.layout.yaml").write_text(
+        "schema_version: frutlups_layout_config_v0\n"
+        "profile_id: artifact_first_template_v2\n"
+        "automation_boundary:\n"
+        "  runner_implemented: true\n",
+        encoding="utf-8",
+    )
+    (root / "prompts" / "for_coding_agent" / "014_frutlups_m001_s01_prior.md").write_text(
+        "# Coding Prompt 014: M001-S01 prior acceptance\n\n"
+        "Workflow metadata:\n\n"
+        "```yaml\n"
+        "milestone: M001\n"
+        "slice: M001-S01\n"
+        "title: prior acceptance\n"
+        "role: coder\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    (root / "prompts" / "for_review_agent" / "014_frutlups_m001_s01_prior.md").write_text(
+        "# Review Prompt 014: M001-S01 prior acceptance\n\n"
+        "Workflow metadata:\n\n"
+        "```yaml\n"
+        "milestone: M001\n"
+        "slice: M001-S01\n"
+        "title: prior acceptance\n"
+        "role: reviewer\n"
+        "```\n\n"
+        "## Read First\n\n"
+        "- coding prompt under review: "
+        "`prompts/for_coding_agent/014_frutlups_m001_s01_prior.md`\n",
+        encoding="utf-8",
+    )
+
+
+def _advance_configured_rework_to_review(root: Path) -> tuple[str, Path]:
+    """Declare rework and create its sequence-015 configured review prompt."""
+
+    code, out, err = _run(
+        [
+            "declare-rework",
+            str(root),
+            "--pass-id",
+            "holistic_pass_001",
+            "--slice",
+            "M001-S01",
+            "--json",
+        ]
+    )
+    if code != 0:
+        raise AssertionError(err or out)
+    declaration = json.loads(out)["declaration"]
+    if declaration["baseline_prompt_sequence"] != 14:
+        raise AssertionError(declaration)
+
+    code, out, err = _run(["make-coding-prompt", str(root), "--json"])
+    if code != 0:
+        raise AssertionError(err or out)
+    coding = json.loads(out)
+    if coding["template"]["sequence"] != 15:
+        raise AssertionError(coding)
+    self_report = root / coding["template"]["self_report_path"]
+    self_report.parent.mkdir(parents=True, exist_ok=True)
+    self_report.write_text(_configured_self_report(), encoding="utf-8")
+
+    code, out, err = _run(["make-review-prompt", str(root), "--json"])
+    if code != 0:
+        raise AssertionError(err or out)
+    review = json.loads(out)
+    review_path = root / review["write_result"]["target_path"]
+    return review["coding_prompt_meta"]["review_output_path"], review_path
 
 
 # ---------------------------------------------------------------------------
@@ -476,6 +578,905 @@ class TerminalReworkRegressionTests(unittest.TestCase):
             inventory.declarations[1].baseline_prompt_sequence,
         )
         self.assertEqual(payload["loop_resume"]["step"], "no_frontier")
+
+
+class ReviewOutputRecognitionTests(unittest.TestCase):
+    """Q007: every emitted declaration clears, unknown shapes fail closed."""
+
+    _DIAGNOSTIC_CODE = "rework_review_output_declaration_unrecognized"
+    _DIAGNOSTIC_MESSAGE = (
+        "paired rework review prompt has no recognizable review-output declaration"
+    )
+
+    def test_every_released_composer_shape_and_historical_section_are_recognized(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_v2_review_project(root)
+            configured = build_review_prompt_plan(root)
+            self.assertTrue(configured.valid, configured.errors)
+            configured_path = root / configured.preview.target_path
+            configured_path.parent.mkdir(parents=True, exist_ok=True)
+            configured_path.write_text(configured.render.content, encoding="utf-8")
+            self.assertIn(
+                f"- Write the review report at `{configured.template.review_output_path}`.",
+                configured.render.content,
+            )
+            self.assertEqual(
+                _review_output_path_from_prompt(configured_path),
+                configured.template.review_output_path,
+            )
+
+            legacy_render = render_review_prompt(_legacy_review_template())
+            self.assertTrue(legacy_render.valid, legacy_render.errors)
+            legacy_path = root / "legacy_generated_review.md"
+            legacy_path.write_text(legacy_render.content, encoding="utf-8")
+            self.assertIn(
+                f"Review output: `{_legacy_review_template().review_output_path}`",
+                legacy_render.content,
+            )
+            self.assertEqual(
+                _review_output_path_from_prompt(legacy_path),
+                _legacy_review_template().review_output_path,
+            )
+            historical_inline_path = root / "historical_inline_placement.md"
+            historical_inline_path.write_text(
+                "# Hand-authored Review\n\n## Historical Notes\n\n"
+                f"Review output: `{_legacy_review_template().review_output_path}`\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                _review_output_path_from_prompt(historical_inline_path),
+                _legacy_review_template().review_output_path,
+            )
+
+            historical_path = root / "historical_review.md"
+            historical_declared = "05_governance/reviews/historical_review_report.md"
+            historical_path.write_text(
+                "# Review\n\n## Review Output Location\n\n"
+                f"`{historical_declared}`\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                _review_output_path_from_prompt(historical_path), historical_declared
+            )
+
+    def test_declaration_shape_precedence_is_stable(self) -> None:
+        inline = "05_governance/reviews/inline_review_report.md"
+        configured = "05_governance/reviews/configured_review_report.md"
+        historical = "05_governance/reviews/historical_review_report.md"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            all_shapes = root / "all.md"
+            all_shapes.write_text(
+                "# Review\n\n## Review Output Location\n\n"
+                f"`{historical}`\n\n## Definition Of Done\n\n"
+                f"- Write the review report at `{configured}`.\n\n## Pairing\n\n"
+                f"Review output: `{inline}`\n",
+                encoding="utf-8",
+            )
+            configured_and_historical = root / "configured_and_historical.md"
+            configured_and_historical.write_text(
+                "# Review\n\n## Review Output Location\n\n"
+                f"`{historical}`\n\n## Definition Of Done\n\n"
+                f"- Write the review report at `{configured}`.\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(_review_output_path_from_prompt(all_shapes), inline)
+            self.assertEqual(
+                _review_output_path_from_prompt(configured_and_historical), configured
+            )
+
+    def test_configured_sequence_015_lifecycle_clears_without_rewriting_history(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            historical = build_status(root).accepted_slice_ids
+            historical_snapshot = _snapshot(root)
+
+            report_rel, review_path = _advance_configured_rework_to_review(root)
+            self.assertTrue(review_path.name.startswith("015_"), review_path.name)
+            self.assertIn(
+                "_rework_001_holistic_pass_001_015_review_report.md", report_rel
+            )
+            self.assertEqual(_review_output_path_from_prompt(review_path), report_rel)
+            _write_review_report(root, report_rel.rsplit("/", 1)[-1], "pass")
+            live = _status(root)["loop_resume"]
+            self.assertEqual(live["step"], "record_verdict")
+            code, out, err = _run(
+                [
+                    "record-verdict",
+                    str(root),
+                    "--review-report",
+                    str(root / report_rel),
+                    "--json",
+                ]
+            )
+            self.assertEqual(code, 0, err or out)
+            payload = _status(root)
+
+            for rel, digest in historical_snapshot.items():
+                self.assertEqual(_snapshot(root).get(rel), digest, rel)
+        self.assertEqual(payload["loop_resume"]["step"], "no_frontier")
+        self.assertEqual(payload["planning_frontier"]["outcome"], "complete")
+        self.assertEqual(tuple(payload["accepted_slice_ids"]), historical)
+
+    def test_unknown_paired_declaration_is_one_typed_invalid_diagnostic_and_pure(self) -> None:
+        hostile = "SECRET_Q007_DO_NOT_ECHO"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _report_rel, review_path = _advance_configured_rework_to_review(root)
+            content = review_path.read_text(encoding="utf-8")
+            owned = next(
+                line for line in content.splitlines() if "Write the review report at" in line
+            )
+            review_path.write_text(
+                content.replace(
+                    owned,
+                    f"- Send unrelated evidence to `{hostile}_review_report.md`.",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            before = _snapshot(root)
+            with (
+                mock.patch(
+                    "frutlups.project._review_output_path_from_prompt",
+                    wraps=project_module._review_output_path_from_prompt,
+                ) as output_reader,
+                mock.patch(
+                    "frutlups.cli.write_coding_prompt",
+                    side_effect=AssertionError("coding writer reached during status"),
+                ),
+                mock.patch(
+                    "frutlups.cli.write_review_prompt",
+                    side_effect=AssertionError("review writer reached during status"),
+                ),
+                mock.patch(
+                    "frutlups.cli.write_verdict_record",
+                    side_effect=AssertionError("verdict writer reached during status"),
+                ),
+                mock.patch(
+                    "frutlups.cli.write_rework_declaration",
+                    side_effect=AssertionError("declaration writer reached during status"),
+                ),
+            ):
+                first = _status(root)
+                second = _status(root)
+            after = _snapshot(root)
+
+        errors = [item for item in first["diagnostics"] if item["severity"] == "error"]
+        self.assertEqual(
+            [(item["code"], item["message"]) for item in errors],
+            [(self._DIAGNOSTIC_CODE, self._DIAGNOSTIC_MESSAGE)],
+        )
+        self.assertEqual(first, second)
+        self.assertEqual(output_reader.call_count, 2)
+        self.assertEqual(first["planning_frontier"]["outcome"], "invalid")
+        self.assertIn(
+            self._DIAGNOSTIC_CODE,
+            " ".join(first["planning_frontier"]["diagnostics"]),
+        )
+        self.assertEqual(after, before)
+        self.assertLessEqual(len(errors[0]["message"]), 240)
+        self.assertNotIn(hostile, errors[0]["message"])
+        self.assertNotIn(str(root), errors[0]["message"])
+        self.assertFalse(any("journal" in rel.lower() for rel in after))
+
+    def test_missing_then_recognized_unreviewed_prompt_remain_ordinary_pending_work(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            code, out, err = _run(
+                [
+                    "declare-rework",
+                    str(root),
+                    "--pass-id",
+                    "holistic_pass_001",
+                    "--slice",
+                    "M001-S01",
+                    "--json",
+                ]
+            )
+            self.assertEqual(code, 0, err or out)
+            code, out, err = _run(["make-coding-prompt", str(root), "--json"])
+            self.assertEqual(code, 0, err or out)
+            coding = json.loads(out)
+            self_report = root / coding["template"]["self_report_path"]
+            self_report.parent.mkdir(parents=True, exist_ok=True)
+            self_report.write_text(_configured_self_report(), encoding="utf-8")
+
+            before_review = _status(root)
+            self.assertEqual(before_review["loop_resume"]["step"], "make_review_prompt")
+            self.assertEqual(before_review["planning_frontier"]["outcome"], "ready")
+            self.assertNotIn(
+                self._DIAGNOSTIC_CODE,
+                {item["code"] for item in before_review["diagnostics"]},
+            )
+
+            code, out, err = _run(["make-review-prompt", str(root), "--json"])
+            self.assertEqual(code, 0, err or out)
+            after_review = _status(root)
+
+        self.assertEqual(after_review["loop_resume"]["step"], "execute_review_prompt")
+        self.assertEqual(after_review["planning_frontier"]["outcome"], "ready")
+        self.assertNotIn(
+            self._DIAGNOSTIC_CODE,
+            {item["code"] for item in after_review["diagnostics"]},
+        )
+
+    def test_recognized_different_output_path_stays_conservatively_pending(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            report_rel, review_path = _advance_configured_rework_to_review(root)
+            different = "05_governance/reviews/m001_s01_different_review_report.md"
+            review_path.write_text(
+                review_path.read_text(encoding="utf-8").replace(
+                    f"`{report_rel}`", f"`{different}`", 1
+                ),
+                encoding="utf-8",
+            )
+            extracted = _review_output_path_from_prompt(review_path)
+            payload = _status(root)
+
+        self.assertEqual(extracted, different)
+        self.assertEqual(payload["planning_frontier"]["outcome"], "ready")
+        self.assertNotIn(
+            self._DIAGNOSTIC_CODE,
+            {item["code"] for item in payload["diagnostics"]},
+        )
+
+    def test_invalid_utf8_paired_prompt_fails_closed_with_the_owned_diagnostic(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _report_rel, review_path = _advance_configured_rework_to_review(root)
+            review_path.write_bytes(b"# Review\n\n\xff\xfe\n")
+            payload = _status(root)
+
+        errors = [item for item in payload["diagnostics"] if item["severity"] == "error"]
+        self.assertEqual(
+            [(item["code"], item["message"]) for item in errors],
+            [(self._DIAGNOSTIC_CODE, self._DIAGNOSTIC_MESSAGE)],
+        )
+        self.assertEqual(payload["planning_frontier"]["outcome"], "invalid")
+
+    def test_lookalikes_outside_owned_live_sections_are_not_authority(self) -> None:
+        report = "05_governance/reviews/forged_review_report.md"
+        cases = {
+            "configured fenced example": (
+                "# Review\n\n## Definition Of Done\n\n```text\n"
+                f"- Write the review report at `{report}`.\n```\n"
+            ),
+            "legacy fenced example": (
+                "# Review\n\n## Pairing\n\n~~~text\n"
+                f"Review output: `{report}`\n~~~\n"
+            ),
+            "read first": (
+                "# Review\n\n## Read First\n\n"
+                f"- Write the review report at `{report}`.\n"
+            ),
+            "unrelated section": (
+                "# Review\n\n## Notes\n\n"
+                f"- Write the review report at `{report}`.\n"
+            ),
+            "unrelated prose": (
+                "# Review\n\n## Definition Of Done\n\n"
+                f"The unrelated example is `{report}`.\n"
+            ),
+            "mutated wording": (
+                "# Review\n\n## Definition Of Done\n\n"
+                f"- Write review report near `{report}`.\n"
+            ),
+            "indented code": (
+                "# Review\n\n## Definition Of Done\n\n"
+                f"    - Write the review report at `{report}`.\n"
+            ),
+        }
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for label, content in cases.items():
+                with self.subTest(shape=label):
+                    path = root / f"{label.replace(' ', '_')}.md"
+                    path.write_text(content, encoding="utf-8")
+                    self.assertEqual(_review_output_path_from_prompt(path), "")
+
+    def test_setext_headings_change_configured_authority_at_both_levels(self) -> None:
+        forged = "05_governance/reviews/forged_review_report.md"
+        owned = "05_governance/reviews/owned_review_report.md"
+        paragraph_shapes = (
+            ("Other Section",),
+            ("Other", "Section"),
+            ("Other", "Middle", "Section"),
+        )
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for underline in ("---", "==="):
+                for ordinal, heading_lines in enumerate(paragraph_shapes, 1):
+                    with self.subTest(underline=underline[0], lines=ordinal):
+                        path = root / f"setext_{underline[0]}_{ordinal}.md"
+                        path.write_text(
+                            "# Review\n\n## Definition Of Done\n\n"
+                            + "\n".join(heading_lines)
+                            + f"\n{underline}\n\n"
+                            f"- Write the review report at `{forged}`.\n",
+                            encoding="utf-8",
+                        )
+                        self.assertEqual(_review_output_path_from_prompt(path), "")
+
+                before_heading = root / f"owned_before_{underline[0]}.md"
+                before_heading.write_text(
+                    "# Review\n\n## Definition Of Done\n\n"
+                    f"- Write the review report at `{owned}`.\n\n"
+                    f"Other Section\n{underline}\n\n"
+                    f"- Write the review report at `{forged}`.\n",
+                    encoding="utf-8",
+                )
+                self.assertEqual(_review_output_path_from_prompt(before_heading), owned)
+
+            setext_owned = root / "setext_owned.md"
+            setext_owned.write_text(
+                "# Review\n\nDefinition Of Done\n------------------\n\n"
+                f"- Write the review report at `{owned}`.\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(_review_output_path_from_prompt(setext_owned), owned)
+
+            setext_historical = root / "setext_historical.md"
+            setext_historical.write_text(
+                "# Review\n\nReview Output Location\n----------------------\n\n"
+                f"`{owned}`\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(_review_output_path_from_prompt(setext_historical), owned)
+
+    def test_nonparagraph_underlines_and_fences_follow_scaffold_semantics(self) -> None:
+        report = "05_governance/reviews/owned_review_report.md"
+        controls = {
+            "blank": "\n---\n",
+            "unordered list": "- list item\n---\n",
+            "ordered list": "1. list item\n---\n",
+            "quote": "> quoted\n---\n",
+            "thematic break": "***\n---\n",
+            "indented code": "    code\n---\n",
+            "fenced block": "```text\nOther Section\n---\n```\n---\n",
+        }
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for label, prefix in controls.items():
+                with self.subTest(control=label):
+                    path = root / f"{label.replace(' ', '_')}.md"
+                    path.write_text(
+                        "# Review\n\n## Definition Of Done\n\n"
+                        + prefix
+                        + f"- Write the review report at `{report}`.\n",
+                        encoding="utf-8",
+                    )
+                    first = _review_output_path_from_prompt(path)
+                    self.assertEqual(first, report)
+                    self.assertEqual(_review_output_path_from_prompt(path), first)
+
+    def test_fence_controls_and_repeated_calls_are_inert_and_pure(self) -> None:
+        report = "05_governance/reviews/owned_review_report.md"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fenced_declaration = root / "fenced_declaration.md"
+            fenced_declaration.write_text(
+                "# Review\n\n## Definition Of Done\n\n```text\n"
+                f"- Write the review report at `{report}`.\n```\n",
+                encoding="utf-8",
+            )
+            first = _review_output_path_from_prompt(fenced_declaration)
+            self.assertEqual(first, "")
+            self.assertEqual(_review_output_path_from_prompt(fenced_declaration), first)
+
+    def test_setext_transition_preserves_legacy_inline_arbitrary_placement(self) -> None:
+        owned = "05_governance/reviews/owned_review_report.md"
+        forged = "05_governance/reviews/forged_review_report.md"
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "legacy_after_setext.md"
+            path.write_text(
+                "# Review\n\n## Definition Of Done\n\n"
+                f"- Write the review report at `{forged}`.\n\n"
+                "Unrelated Live Section\n----------------------\n\n"
+                f"Review output: `{owned}`\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(_review_output_path_from_prompt(path), owned)
+
+    def test_selected_rework_result_is_finalized_once_and_immutable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _advance_configured_rework_to_review(root)
+            collected: list = []
+            real_collect = project_module._collect_acceptance_evidence
+
+            def collect(root_arg, profile):
+                evidence = real_collect(root_arg, profile)
+                collected.append(evidence)
+                return evidence
+
+            with mock.patch.object(
+                project_module,
+                "_collect_acceptance_evidence",
+                side_effect=collect,
+            ) as collector:
+                _status_obj, evidence = project_module._build_status_with_evidence(root)
+
+        self.assertEqual(collector.call_count, 1)
+        self.assertEqual(len(collected), 1)
+        self.assertIs(evidence, collected[0])
+        self.assertIsInstance(evidence.rework_resolution, project_module._ReworkResolution)
+        annotation = get_type_hints(project_module._AcceptanceEvidence)["rework_resolution"]
+        self.assertEqual(
+            annotation,
+            project_module._ReworkResolution | None,
+        )
+        self.assertFalse(hasattr(evidence.rework_resolution, "append"))
+        self.assertFalse(hasattr(evidence.rework_resolution, "clear"))
+        doc = project_module._build_status_with_evidence.__doc__ or ""
+        self.assertIn("immutable rework-resolution result", doc)
+        self.assertNotIn(
+            "No public dataclass field, JSON key, cache, or global is added.",
+            doc,
+        )
+        with self.assertRaises(FrozenInstanceError):
+            evidence.rework_resolution = None
+        with self.assertRaises(FrozenInstanceError):
+            evidence.rework_resolution.diagnostics = ()
+
+    def test_second_finalization_is_rejected_without_replacing_identity(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _advance_configured_rework_to_review(root)
+            _status_obj, evidence = project_module._build_status_with_evidence(root)
+            finalized = evidence.rework_resolution
+
+        with self.assertRaises(RuntimeError):
+            project_module._finalize_rework_resolution(
+                evidence,
+                project_module._ReworkResolution(),
+            )
+        self.assertIs(evidence.rework_resolution, finalized)
+
+    def test_every_path_composition_observes_the_paired_prompt_once(self) -> None:
+        from frutlups.gate import build_human_gate
+        from frutlups.handoff import build_coder_handoff, build_reviewer_handoff
+        from frutlups.orchestrator import build_orchestrator_plan, run_one_step
+        from frutlups.project import build_coding_prompt_plan
+
+        cases = {
+            "status": lambda root: build_status(root),
+            "loop resume": lambda root: build_loop_resume_status(root),
+            "coding plan": lambda root: build_coding_prompt_plan(root),
+            "review plan": lambda root: build_review_prompt_plan(root),
+            "planning frontier": lambda root: build_planning_frontier_status(root),
+            "human gate": lambda root: build_human_gate(root),
+            "orchestrator plan": lambda root: build_orchestrator_plan(root),
+            "orchestrator dry run": lambda root: run_one_step(
+                root, dry_run=True, journal=False
+            ),
+            "coder handoff": lambda root: build_coder_handoff(root),
+            "reviewer handoff": lambda root: build_reviewer_handoff(root),
+        }
+        for label, action in cases.items():
+            with self.subTest(composition=label), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _configured_rework_project(root)
+                _advance_configured_rework_to_review(root)
+                with mock.patch.object(
+                    project_module,
+                    "_review_output_path_from_prompt",
+                    wraps=project_module._review_output_path_from_prompt,
+                ) as reader:
+                    action(root)
+                self.assertEqual(reader.call_count, 1)
+
+    def test_finalized_snapshot_cannot_be_reused_across_changed_compositions(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _report_rel, review_path = _advance_configured_rework_to_review(root)
+            _status_obj, evidence = project_module._build_status_with_evidence(root)
+            finalized = evidence.rework_resolution
+            content = review_path.read_text(encoding="utf-8")
+            owned = next(
+                line for line in content.splitlines() if "Write the review report at" in line
+            )
+            review_path.write_text(
+                content.replace(owned, "- declaration intentionally removed", 1),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(
+                    project_module,
+                    "_collect_acceptance_evidence",
+                    return_value=evidence,
+                ),
+                mock.patch.object(
+                    project_module,
+                    "_review_output_path_from_prompt",
+                    wraps=project_module._review_output_path_from_prompt,
+                ) as reader,
+                self.assertRaisesRegex(RuntimeError, "already finalized"),
+            ):
+                project_module._build_status_with_evidence(root)
+
+        self.assertEqual(reader.call_count, 1)
+        self.assertIs(evidence.rework_resolution, finalized)
+
+    def test_raw_evidence_uses_one_fallback_without_becoming_mutable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _configured_rework_project(root)
+            _advance_configured_rework_to_review(root)
+            status, selected = project_module._build_status_with_evidence(root)
+            raw = project_module._AcceptanceEvidence(
+                accepted_slice_ids=selected.accepted_slice_ids,
+                pass_reports=selected.pass_reports,
+                unrecorded_pass_reports=selected.unrecorded_pass_reports,
+                contradictions=selected.contradictions,
+                authority_defects=selected.authority_defects,
+                closure_receipts=selected.closure_receipts,
+                rework_declarations=selected.rework_declarations,
+                rework_diagnostics=selected.rework_diagnostics,
+            )
+            self.assertIsNone(raw.rework_resolution)
+            with mock.patch.object(
+                project_module,
+                "_review_output_path_from_prompt",
+                wraps=project_module._review_output_path_from_prompt,
+            ) as reader:
+                _resume, _verdict, used = (
+                    project_module._loop_resume_with_verdict_and_evidence(
+                        status,
+                        evidence=raw,
+                    )
+                )
+
+        self.assertEqual(reader.call_count, 1)
+        self.assertIs(used, raw)
+        self.assertIsNone(raw.rework_resolution)
+        with self.assertRaises(FrozenInstanceError):
+            raw.rework_resolution = project_module._ReworkResolution()
+
+    def test_missing_reviews_retains_declaration_and_preserves_empty_compatibility(
+        self,
+    ) -> None:
+        for declared in (False, True):
+            with self.subTest(declared=declared), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _completed_project(root, closure=True)
+                if declared:
+                    _write_declaration(root)
+                shutil.rmtree(root / "05_governance" / "reviews")
+                collected: list = []
+                real_collect = project_module._collect_acceptance_evidence
+
+                def collect(
+                    root_arg,
+                    profile,
+                    real_collect=real_collect,
+                    collected=collected,
+                ):
+                    evidence = real_collect(root_arg, profile)
+                    collected.append(evidence)
+                    return evidence
+
+                with (
+                    mock.patch.object(
+                        project_module,
+                        "_collect_acceptance_evidence",
+                        side_effect=collect,
+                    ),
+                    mock.patch.object(
+                        project_module,
+                        "load_rework_declarations",
+                        wraps=project_module.load_rework_declarations,
+                    ) as loader,
+                ):
+                    status, evidence = project_module._build_status_with_evidence(root)
+                resume, verdict, used = (
+                    project_module._loop_resume_with_verdict_and_evidence(
+                        status, evidence=evidence
+                    )
+                )
+                frontier = project_module._compute_planning_frontier(
+                    status, resume, verdict, used
+                )
+
+                self.assertEqual(loader.call_count, 1)
+                self.assertEqual(len(collected), 1)
+                self.assertIs(evidence, collected[0])
+                self.assertIs(used, evidence)
+                self.assertIsInstance(
+                    evidence.rework_resolution, project_module._ReworkResolution
+                )
+                self.assertFalse(hasattr(evidence.rework_resolution, "append"))
+                self.assertEqual(len(evidence.rework_declarations), int(declared))
+                if declared:
+                    self.assertEqual(
+                        evidence.rework_resolution.diagnostics,
+                        (
+                            (
+                                "rework_declaration_slice_unaccepted",
+                                "rework declaration names a slice without "
+                                "historical accepted evidence",
+                            ),
+                        ),
+                    )
+                    self.assertEqual(frontier.outcome, "invalid")
+                    self.assertIn(
+                        "rework_declaration_slice_unaccepted", frontier.diagnostics[0]
+                    )
+                else:
+                    self.assertEqual(evidence.rework_resolution.diagnostics, ())
+                    self.assertEqual(resume.step.value, "make_coding_prompt")
+                    self.assertEqual(frontier.outcome, "ready")
+
+    def test_authority_root_early_returns_retain_inventory_and_precedence(
+        self,
+    ) -> None:
+        cases = (
+            ("oserror", OSError("SECRET_Q007_OSERROR"), "unresolvable_authority_root"),
+            (
+                "runtime",
+                RuntimeError("SECRET_Q007_RUNTIME"),
+                "unresolvable_authority_root",
+            ),
+            ("escaped", None, "escaped_authority_root"),
+        )
+        for label, failure, expected_kind in cases:
+            with self.subTest(case=label), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _completed_project(root, closure=True)
+                _write_declaration(root)
+                profile = project_module.legacy_profile()
+                reviews = root / profile.reviews_dir
+                original_resolve = Path.resolve
+
+                def resolve(
+                    path,
+                    *args,
+                    reviews=reviews,
+                    failure=failure,
+                    root=root,
+                    original_resolve=original_resolve,
+                    **kwargs,
+                ):
+                    if path == reviews:
+                        if failure is not None:
+                            raise failure
+                        return root.parent / "SECRET_Q007_EXTERNAL"
+                    return original_resolve(path, *args, **kwargs)
+
+                with (
+                    mock.patch.object(
+                        Path, "resolve", autospec=True, side_effect=resolve
+                    ),
+                    mock.patch.object(
+                        project_module,
+                        "load_rework_declarations",
+                        wraps=project_module.load_rework_declarations,
+                    ) as loader,
+                ):
+                    status, evidence = project_module._build_status_with_evidence(root)
+                resume, verdict, used = (
+                    project_module._loop_resume_with_verdict_and_evidence(
+                        status, evidence=evidence
+                    )
+                )
+                frontier = project_module._compute_planning_frontier(
+                    status, resume, verdict, used
+                )
+
+                self.assertEqual(loader.call_count, 1)
+                self.assertEqual(len(evidence.rework_declarations), 1)
+                self.assertEqual(
+                    [item.kind.value for item in evidence.authority_defects],
+                    [expected_kind],
+                )
+                self.assertEqual(resume.step.value, "fix_review_report")
+                self.assertEqual(resume.diagnostics, (evidence.authority_defects[0].diagnostic,))
+                self.assertEqual(frontier.outcome, "invalid")
+                surfaced = " ".join(
+                    (*resume.diagnostics, *frontier.diagnostics)
+                )
+                self.assertNotIn("SECRET_Q007", surfaced)
+
+    def test_discovery_early_returns_retain_inventory_and_precedence(self) -> None:
+        for discovery in ("flat", "recursive_contained"):
+            with self.subTest(discovery=discovery), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _completed_project(root, closure=True)
+                _write_declaration(root)
+                if discovery == "recursive_contained":
+                    (root / "frutlups.layout.yaml").write_text(
+                        "schema_version: frutlups_layout_config_v0\n"
+                        "reports:\n"
+                        "  discovery: recursive_contained\n",
+                        encoding="utf-8",
+                    )
+                profile = build_status(root).layout.profile
+                reviews = root / profile.reviews_dir
+                original_iterdir = Path.iterdir
+
+                def iterdir(
+                    path,
+                    reviews=reviews,
+                    original_iterdir=original_iterdir,
+                ):
+                    if path == reviews:
+                        raise OSError("SECRET_Q007_DISCOVERY")
+                    return original_iterdir(path)
+
+                discovery_patch = (
+                    mock.patch.object(
+                        project_module,
+                        "_contained_review_inventory",
+                        side_effect=project_module._DiscoveryBoundExceeded,
+                    )
+                    if discovery == "recursive_contained"
+                    else mock.patch.object(
+                        Path, "iterdir", autospec=True, side_effect=iterdir
+                    )
+                )
+                with (
+                    discovery_patch,
+                    mock.patch.object(
+                        project_module,
+                        "load_rework_declarations",
+                        wraps=project_module.load_rework_declarations,
+                    ) as loader,
+                ):
+                    status, evidence = project_module._build_status_with_evidence(root)
+                resume, verdict, used = (
+                    project_module._loop_resume_with_verdict_and_evidence(
+                        status, evidence=evidence
+                    )
+                )
+                frontier = project_module._compute_planning_frontier(
+                    status, resume, verdict, used
+                )
+
+                self.assertEqual(loader.call_count, 1)
+                self.assertEqual(len(evidence.rework_declarations), 1)
+                self.assertEqual(
+                    [item.kind.value for item in evidence.authority_defects],
+                    ["unresolvable_authority_root"],
+                )
+                self.assertEqual(resume.step.value, "fix_review_report")
+                self.assertEqual(resume.diagnostics, (evidence.authority_defects[0].diagnostic,))
+                self.assertEqual(frontier.outcome, "invalid")
+                self.assertNotIn(
+                    "SECRET_Q007", " ".join((*resume.diagnostics, *frontier.diagnostics))
+                )
+
+    def test_normal_collector_observes_declarations_once_before_finalization(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _completed_project(root, closure=True)
+            _write_declaration(root)
+            collected: list = []
+            real_collect = project_module._collect_acceptance_evidence
+
+            def collect(root_arg, profile):
+                evidence = real_collect(root_arg, profile)
+                collected.append(evidence)
+                return evidence
+
+            with (
+                mock.patch.object(
+                    project_module,
+                    "_collect_acceptance_evidence",
+                    side_effect=collect,
+                ),
+                mock.patch.object(
+                    project_module,
+                    "load_rework_declarations",
+                    wraps=project_module.load_rework_declarations,
+                ) as loader,
+            ):
+                _status_obj, evidence = project_module._build_status_with_evidence(root)
+
+        self.assertEqual(loader.call_count, 1)
+        self.assertEqual(len(collected), 1)
+        self.assertIs(evidence, collected[0])
+        self.assertEqual(len(evidence.rework_declarations), 1)
+        self.assertIsInstance(
+            evidence.rework_resolution, project_module._ReworkResolution
+        )
+        with self.assertRaises(RuntimeError):
+            project_module._finalize_rework_resolution(
+                evidence, project_module._ReworkResolution()
+            )
+
+    def test_status_json_and_public_contract_shapes_remain_frozen(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _fresh_project(root)
+            payload = _status(root)
+            _write_declaration(root)
+            declaration = json.loads(
+                (root / "05_governance/rework_declarations/001_holistic_pass_001.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(
+            set(payload),
+            {
+                "accepted_slice_ids",
+                "active_roadmap",
+                "detailed_roadmap",
+                "diagnostics",
+                "layout",
+                "loop_resume",
+                "memory",
+                "memory_mode",
+                "milestones",
+                "missing_required_directories",
+                "next_milestone",
+                "next_slice",
+                "ok",
+                "planning_frontier",
+                "prompt_artifacts",
+                "prompt_health",
+                "prompts",
+                "root",
+                "slices",
+            },
+        )
+        self.assertEqual(
+            set(payload["planning_frontier"]),
+            {
+                "action",
+                "actor",
+                "block_citation",
+                "block_owner",
+                "completion_evidence",
+                "contract_id",
+                "contract_version",
+                "diagnostics",
+                "outcome",
+            },
+        )
+        self.assertEqual(
+            set(payload["loop_resume"]),
+            {
+                "coding_prompt_path",
+                "diagnostics",
+                "frontier_slice_id",
+                "frontier_slice_title",
+                "message",
+                "next_command",
+                "review_prompt_path",
+                "review_report_path",
+                "self_report_path",
+                "step",
+                "verdict_record_path",
+            },
+        )
+        self.assertEqual(PLANNING_FRONTIER_CONTRACT_VERSION, "1")
+        self.assertEqual(
+            (declaration["contract_id"], declaration["contract_version"]),
+            ("frutlups.rework_declaration", "1"),
+        )
+        self.assertEqual(len(frutlups.__all__), 152)
+        import argparse
+
+        from frutlups.cli import _build_parser
+
+        subparsers = next(
+            action
+            for action in _build_parser()._actions
+            if isinstance(action, argparse._SubParsersAction)
+        )
+        self.assertEqual(len(subparsers.choices), 9)
 
 
 class DeclarationCountBoundaryTests(unittest.TestCase):

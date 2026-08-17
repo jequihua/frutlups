@@ -236,6 +236,90 @@ def _is_indented_code(line: str) -> bool:
     return column >= 4
 
 
+@dataclass(frozen=True)
+class _LiveMarkdownEvent:
+    """One live content line or heading from the accepted scaffold scanner."""
+
+    line: str | None = None
+    heading: tuple[str, int, tuple[str, ...]] | None = None
+
+
+def _live_markdown_events(lines: list[str]) -> tuple[_LiveMarkdownEvent, ...]:
+    """Classify live content and headings with the accepted Markdown rules.
+
+    Ordinary paragraph lines are held only until the next line determines
+    whether they are setext heading text. Fenced and indented-code bytes are
+    absent from the result; every other non-heading live line is retained in
+    order. This is the single private scanner authority used by both scaffold
+    topology validation and consumers that need section-aware live content.
+    """
+
+    events: list[_LiveMarkdownEvent] = []
+    paragraph: list[str] = []
+    in_fence: tuple[str, int] | None = None  # char, length
+
+    def flush_paragraph() -> None:
+        events.extend(_LiveMarkdownEvent(line=item) for item in paragraph)
+        paragraph.clear()
+
+    for line in lines:
+        if in_fence is not None:
+            if _closing_fence(line, in_fence[0], in_fence[1]):
+                in_fence = None
+            continue
+
+        fence = _FENCE_OPEN.match(line)
+        if fence:
+            flush_paragraph()
+            fence_run = fence.group(1)
+            in_fence = (fence_run[0], len(fence_run))
+            continue
+        if _ATX_HEADING.match(line):
+            flush_paragraph()
+            hashes = len(line.strip()) - len(line.strip().lstrip("#"))
+            events.append(
+                _LiveMarkdownEvent(
+                    heading=("atx", hashes, (line.strip(),)),
+                )
+            )
+            continue
+        if _SETEXT_UNDERLINE.match(line):
+            if paragraph:
+                underline = line.strip()
+                level = 1 if underline.startswith("=") else 2
+                events.append(
+                    _LiveMarkdownEvent(
+                        heading=("setext", level, tuple(paragraph)),
+                    )
+                )
+                paragraph.clear()
+            else:
+                # An underline without eligible paragraph text is live
+                # content, but not a heading.
+                events.append(_LiveMarkdownEvent(line=line))
+            continue
+        if not line.strip():
+            flush_paragraph()
+            events.append(_LiveMarkdownEvent(line=line))
+            continue
+        if _is_indented_code(line):
+            flush_paragraph()
+            continue
+        if (
+            _QUOTE_MARKER.match(line)
+            or _UL_MARKER.match(line)
+            or _OL_MARKER.match(line)
+            or _is_thematic_break(line)
+        ):
+            flush_paragraph()
+            events.append(_LiveMarkdownEvent(line=line))
+            continue
+        paragraph.append(line)
+
+    flush_paragraph()
+    return tuple(events)
+
+
 def _heading_topology(lines: list[str]) -> tuple[tuple[str, int, tuple[str, ...]], ...]:
     """The ordered all-heading topology of a document.
 
@@ -263,51 +347,11 @@ def _heading_topology(lines: list[str]) -> tuple[tuple[str, int, tuple[str, ...]
     exact text, order, and count while ignoring line-number shifts.
     """
 
-    topology: list[tuple[str, int, tuple[str, ...]]] = []
-    paragraph: list[str] = []
-    in_fence: tuple[str, int] | None = None  # char, length
-
-    def reset() -> None:
-        paragraph.clear()
-
-    for line in lines:
-        if in_fence is None:
-            fence = _FENCE_OPEN.match(line)
-            if fence:
-                fence_run = fence.group(1)
-                in_fence = (fence_run[0], len(fence_run))
-                reset()
-                continue
-            if _ATX_HEADING.match(line):
-                hashes = len(line.strip()) - len(line.strip().lstrip("#"))
-                topology.append(("atx", hashes, (line.strip(),)))
-                reset()
-                continue
-            if _SETEXT_UNDERLINE.match(line):
-                if paragraph:
-                    underline = line.strip()
-                    level = 1 if underline.startswith("=") else 2
-                    topology.append(("setext", level, tuple(paragraph)))
-                # An underline without eligible paragraph text is not a heading.
-                reset()
-                continue
-            if not line.strip():
-                reset()
-                continue
-            if (
-                _QUOTE_MARKER.match(line)
-                or _UL_MARKER.match(line)
-                or _OL_MARKER.match(line)
-                or _is_thematic_break(line)
-                or _is_indented_code(line)
-            ):
-                reset()
-                continue
-            paragraph.append(line)
-            continue
-        if _closing_fence(line, in_fence[0], in_fence[1]):
-            in_fence = None
-    return tuple(topology)
+    return tuple(
+        event.heading
+        for event in _live_markdown_events(lines)
+        if event.heading is not None
+    )
 
 
 def _required_section_errors(

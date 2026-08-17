@@ -15,6 +15,7 @@ from frutlups._scaffold import (
     _closing_fence,
     _FENCE_OPEN,
     _is_indented_code,
+    _live_markdown_events,
     render_configured_scaffold,
 )
 from frutlups.artifacts import REQUIRED_DIRECTORIES, TemplatePaths
@@ -1120,7 +1121,9 @@ def _build_status_with_evidence(
     from that same private snapshot, which composite callers thread into
     resume, gate, planning-frontier, orchestrator, and verdict-record
     planning so one emitted response never combines two evidence snapshots.
-    No public dataclass field, JSON key, cache, or global is added.
+    Before return, the exact private evidence object is enriched once with its
+    immutable rework-resolution result. No public dataclass field, JSON key,
+    mutable cache, or global is added.
     """
 
     layout = ProjectLayout.discover(start, layout_config=layout_config)
@@ -1214,10 +1217,7 @@ def _build_status_with_evidence(
     selected_profile = (
         layout.loaded.profile if layout.loaded is not None else legacy_profile()
     )
-    evidence = _with_rework_declarations(
-        layout.root,
-        _collect_acceptance_evidence(layout.root, selected_profile),
-    )
+    evidence = _collect_acceptance_evidence(layout.root, selected_profile)
     accepted_slice_ids = evidence.accepted_slice_ids
     prompt_artifacts = inventory_prompts(paths.prompts)
     rework = _resolve_rework(
@@ -1228,6 +1228,7 @@ def _build_status_with_evidence(
         selected_profile,
         evidence,
     )
+    _finalize_rework_resolution(evidence, rework)
     for code, message in rework.diagnostics:
         diagnostics.append(
             Diagnostic(
@@ -1729,18 +1730,17 @@ def _build_coding_prompt_plan_from_status(
     profile = status.layout.profile if status.layout is not None else legacy_profile()
 
     if evidence is None:
-        evidence = _with_rework_declarations(
+        evidence = _collect_acceptance_evidence(status.root, profile)
+    rework = evidence.rework_resolution
+    if rework is None:
+        rework = _resolve_rework(
             status.root,
-            _collect_acceptance_evidence(status.root, profile),
+            status.slices,
+            status.accepted_slice_ids,
+            status.prompt_artifacts,
+            profile,
+            evidence,
         )
-    rework = _resolve_rework(
-        status.root,
-        status.slices,
-        status.accepted_slice_ids,
-        status.prompt_artifacts,
-        profile,
-        evidence,
-    )
 
     errors: list[str] = []
 
@@ -2092,6 +2092,9 @@ def _format_names(paths: tuple[Path, ...]) -> str:
 _REVIEW_OUTPUT_INLINE_RE = re.compile(
     r"(?im)^review output\s*:\s*`([^`]*_review_report\.md)`",
 )
+_REVIEW_OUTPUT_CONFIGURED_RE = re.compile(
+    r"^- Write the review report at `([^`]*_review_report\.md)`\.$",
+)
 _REVIEW_REPORT_BACKTICK_RE = re.compile(r"`([^`]*_review_report\.md)`")
 
 # A "terminal closure-review report" reviews a verdict-recording closure slice,
@@ -2258,10 +2261,15 @@ class _AcceptanceEvidence:
     closure_receipts: tuple[_ClosureReceipt, ...] = ()
     rework_declarations: tuple[ReworkDeclaration, ...] = ()
     rework_diagnostics: tuple[ReworkDeclarationDiagnostic, ...] = ()
+    rework_resolution: _ReworkResolution | None = dataclass_field(
+        default=None, compare=False, repr=False
+    )
 
 
-def _with_rework_declarations(root: Path, evidence: _AcceptanceEvidence) -> _AcceptanceEvidence:
-    """Attach one bounded declaration inventory to an acceptance snapshot."""
+def _with_rework_declarations(
+    root: Path, evidence: _AcceptanceEvidence
+) -> _AcceptanceEvidence:
+    """Return the evidence with one bounded declaration inventory attached."""
 
     inventory = load_rework_declarations(root)
     if not inventory.declarations and not inventory.diagnostics:
@@ -2631,7 +2639,9 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
     report_re = _slice_artifact_re(profile.review_report_suffix)
     record_re = _slice_artifact_re(profile.verdict_record_suffix)
     if not reviews_dir_abs.is_dir():
-        return _AcceptanceEvidence((), (), (), ())
+        return _with_rework_declarations(
+            root, _AcceptanceEvidence((), (), (), ())
+        )
     authority_defects: list[_AuthorityDefect] = []
     try:
         resolved_root = root.resolve()
@@ -2641,14 +2651,17 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
         # resolved is typed fail-closed state, independently of any record
         # (Review 029). RuntimeError covers resolution loops; no exception
         # text or absolute path is echoed.
-        return _AcceptanceEvidence(
-            (),
-            (),
-            (),
-            (),
-            (
-                _make_authority_defect(
-                    _AuthorityDefectKind.UNRESOLVABLE_AUTHORITY_ROOT, reviews_rel
+        return _with_rework_declarations(
+            root,
+            _AcceptanceEvidence(
+                (),
+                (),
+                (),
+                (),
+                (
+                    _make_authority_defect(
+                        _AuthorityDefectKind.UNRESOLVABLE_AUTHORITY_ROOT, reviews_rel
+                    ),
                 ),
             ),
         )
@@ -2659,14 +2672,17 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
         # so no external filename, path, byte, or hostile value can enter
         # evidence identities or diagnostics; only the safe configured
         # repo-relative root identity is reported.
-        return _AcceptanceEvidence(
-            (),
-            (),
-            (),
-            (),
-            (
-                _make_authority_defect(
-                    _AuthorityDefectKind.ESCAPED_AUTHORITY_ROOT, reviews_rel
+        return _with_rework_declarations(
+            root,
+            _AcceptanceEvidence(
+                (),
+                (),
+                (),
+                (),
+                (
+                    _make_authority_defect(
+                        _AuthorityDefectKind.ESCAPED_AUTHORITY_ROOT, reviews_rel
+                    ),
                 ),
             ),
         )
@@ -2701,14 +2717,17 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
                 key=lambda pair: pair[1],
             )
     except (OSError, RuntimeError, _DiscoveryBoundExceeded):
-        return _AcceptanceEvidence(
-            (),
-            (),
-            (),
-            (),
-            (
-                _make_authority_defect(
-                    _AuthorityDefectKind.UNRESOLVABLE_AUTHORITY_ROOT, reviews_rel
+        return _with_rework_declarations(
+            root,
+            _AcceptanceEvidence(
+                (),
+                (),
+                (),
+                (),
+                (
+                    _make_authority_defect(
+                        _AuthorityDefectKind.UNRESOLVABLE_AUTHORITY_ROOT, reviews_rel
+                    ),
                 ),
             ),
         )
@@ -2832,37 +2851,63 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
                 )
 
     unrecorded = tuple(rel for rel in passing_reports if rel not in receipted)
-    return _AcceptanceEvidence(
-        tuple(accepted),
-        tuple(passing_reports),
-        unrecorded,
-        tuple(contradictions),
-        tuple(authority_defects),
-        tuple(closure_receipts),
+    return _with_rework_declarations(
+        root,
+        _AcceptanceEvidence(
+            tuple(accepted),
+            tuple(passing_reports),
+            unrecorded,
+            tuple(contradictions),
+            tuple(authority_defects),
+            tuple(closure_receipts),
+        ),
     )
 
 
 def _review_output_path_from_prompt(path: Path) -> str:
     """Return the review-report path a review prompt declares, or ``""``.
 
-    Supports both the generated review-prompt shape (an inline
-    ``Review output: `<path>``` line) and the hand-authored shape (a
-    ``Review Output Location`` section containing the backtick path). Returns
-    ``""`` for bare review prompts that declare no output location. Never raises.
+    Supports the legacy generated inline shape in any live placement, the
+    configured generated instruction in ``Definition Of Done``, and the
+    hand-authored ``Review Output Location`` section. Fenced examples,
+    indented code, and configured-shape lookalikes in unrelated sections remain
+    inert. Deterministic precedence is legacy inline, configured instruction,
+    then historical section. Returns ``""`` for bare review prompts that
+    declare no output location. Never raises.
     """
 
     try:
         content = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return ""
-    inline = _REVIEW_OUTPUT_INLINE_RE.search(content)
-    if inline:
-        return inline.group(1).strip()
-    body = _sections_from_text(content).get("review output location", "")
-    match = _REVIEW_REPORT_BACKTICK_RE.search(body)
-    if match:
-        return match.group(1).strip()
-    return ""
+    inline_path = ""
+    configured_path = ""
+    historical_path = ""
+    section = ""
+    for event in _live_markdown_events(content.splitlines()):
+        if event.heading is not None:
+            kind, level, heading_lines = event.heading
+            if kind == "atx":
+                raw = heading_lines[0][level:].strip()
+            else:
+                raw = " ".join(line.strip() for line in heading_lines)
+            section = " ".join(raw.lower().rstrip(":!?.;,").split())
+            continue
+        line = event.line or ""
+
+        if not inline_path:
+            match = _REVIEW_OUTPUT_INLINE_RE.search(line)
+            if match:
+                inline_path = match.group(1).strip()
+        if section == "definition of done" and not configured_path:
+            match = _REVIEW_OUTPUT_CONFIGURED_RE.fullmatch(line)
+            if match:
+                configured_path = match.group(1).strip()
+        elif section == "review output location" and not historical_path:
+            match = _REVIEW_REPORT_BACKTICK_RE.search(line)
+            if match:
+                historical_path = match.group(1).strip()
+    return inline_path or configured_path or historical_path
 
 
 # ---------------------------------------------------------------------------
@@ -3918,6 +3963,37 @@ class _ReworkResolution:
     diagnostics: tuple[tuple[str, str], ...] = ()
 
 
+def _finalize_rework_resolution(
+    evidence: _AcceptanceEvidence,
+    resolution: _ReworkResolution,
+) -> None:
+    """Enrich one selected evidence snapshot with one immutable result.
+
+    The raw collector object must be retained by identity, so the single
+    internal ``object.__setattr__`` is centralized here. A second finalization
+    is a programming error; ordinary consumers receive a frozen field whose
+    value is itself frozen and has no mutable container operations.
+    """
+
+    if evidence.rework_resolution is not None:
+        raise RuntimeError("rework resolution is already finalized")
+    object.__setattr__(evidence, "rework_resolution", resolution)
+
+
+@dataclass(frozen=True)
+class _ReworkFreshAcceptance:
+    """One declared slice's fresh-evidence result from a single observation."""
+
+    accepted: bool = False
+    diagnostic: tuple[str, str] | None = None
+
+
+_REWORK_REVIEW_OUTPUT_UNRECOGNIZED = (
+    "rework_review_output_declaration_unrecognized",
+    "paired rework review prompt has no recognizable review-output declaration",
+)
+
+
 def _rework_self_report_valid(
     root: Path,
     profile: LayoutProfile,
@@ -3984,7 +4060,7 @@ def _rework_slice_has_fresh_acceptance(
     prompt_artifacts: tuple[PromptArtifact, ...],
     evidence: _AcceptanceEvidence,
     upper_prompt_sequence: int | None = None,
-) -> bool:
+) -> _ReworkFreshAcceptance:
     """Whether one declared slice has a complete post-declaration evidence chain."""
 
     candidates: list[tuple[int, PromptArtifact, CodingPromptMeta]] = []
@@ -3999,27 +4075,34 @@ def _rework_slice_has_fresh_acceptance(
         if meta.slice_id.upper() == slice_id.upper():
             candidates.append((artifact.sequence, artifact, meta))
     if not candidates:
-        return False
+        return _ReworkFreshAcceptance()
     _sequence, coding_artifact, meta = max(candidates, key=lambda item: item[0])
     marker = (
         f"_rework_{declaration.declaration_sequence:03d}_"
         f"{declaration.pass_id}_{coding_artifact.sequence:03d}"
     )
     if marker not in meta.self_report_path or marker not in meta.review_output_path:
-        return False
+        return _ReworkFreshAcceptance()
     if not _rework_self_report_valid(root, profile, meta):
-        return False
+        return _ReworkFreshAcceptance()
     paired = _paired_review_for_rework(
         root, profile, prompt_artifacts, coding_artifact, meta
     )
     if paired is None:
-        return False
+        return _ReworkFreshAcceptance()
     paired_path = root / profile.review_prompt_dir / paired.filename
-    if _review_output_path_from_prompt(paired_path) != meta.review_output_path:
-        return False
-    return (
-        meta.review_output_path in evidence.pass_reports
-        and meta.review_output_path not in evidence.unrecorded_pass_reports
+    paired_output = _review_output_path_from_prompt(paired_path)
+    if not paired_output:
+        return _ReworkFreshAcceptance(
+            diagnostic=_REWORK_REVIEW_OUTPUT_UNRECOGNIZED
+        )
+    if paired_output != meta.review_output_path:
+        return _ReworkFreshAcceptance()
+    return _ReworkFreshAcceptance(
+        accepted=(
+            meta.review_output_path in evidence.pass_reports
+            and meta.review_output_path not in evidence.unrecorded_pass_reports
+        )
     )
 
 
@@ -4095,7 +4178,7 @@ def _resolve_rework(
             else None
         )
         for slice_id in declaration.slice_ids:
-            if _rework_slice_has_fresh_acceptance(
+            fresh = _rework_slice_has_fresh_acceptance(
                 root,
                 profile,
                 declaration,
@@ -4103,7 +4186,10 @@ def _resolve_rework(
                 prompt_artifacts,
                 evidence,
                 upper_prompt_sequence,
-            ):
+            )
+            if fresh.diagnostic is not None:
+                return _ReworkResolution(diagnostics=(fresh.diagnostic,))
+            if fresh.accepted:
                 completed.append(slice_id)
                 continue
             pending = roadmap_by_id[slice_id]
@@ -4725,10 +4811,7 @@ def _build_verdict_record_plan_from_profile(
     slices = parse_slices(detailed_roadmap) if detailed_roadmap is not None else ()
     # M003-S05: accepted IDs come from the selected profile's typed evidence.
     if evidence is None:
-        evidence = _with_rework_declarations(
-            root,
-            _collect_acceptance_evidence(root, profile),
-        )
+        evidence = _collect_acceptance_evidence(root, profile)
     accepted_slice_ids = evidence.accepted_slice_ids
 
     # Locate the reviewed slice in the roadmap
@@ -5018,10 +5101,7 @@ def _compute_loop_resume(
     # deterministic repo-relative record path wins; the rest are reported only
     # through bounded deterministic diagnostics.
     if evidence is None:
-        evidence = _with_rework_declarations(
-            root,
-            _collect_acceptance_evidence(root, profile),
-        )
+        evidence = _collect_acceptance_evidence(root, profile)
     if evidence_out is not None:
         evidence_out.append(evidence)
     if evidence.authority_defects:
@@ -5080,14 +5160,16 @@ def _compute_loop_resume(
     # defects and contradictions have failed closed. This preserves the rule
     # that hostile or escaped authority state wins before any ordinary artifact
     # routing reads are attempted.
-    rework = _resolve_rework(
-        root,
-        slices,
-        evidence.accepted_slice_ids,
-        prompt_artifacts,
-        profile,
-        evidence,
-    )
+    rework = evidence.rework_resolution
+    if rework is None:
+        rework = _resolve_rework(
+            root,
+            slices,
+            evidence.accepted_slice_ids,
+            prompt_artifacts,
+            profile,
+            evidence,
+        )
     active_rework = rework.active_declaration
 
     # Pre-check: scan for pass-verdict review reports that have no verdict record.
@@ -5849,6 +5931,16 @@ def _compute_planning_frontier(
         return _frontier_result(
             PlanningFrontierOutcome.INVALID,
             [f"invalid rework declaration state: {code}" for code in rework_codes],
+        )
+    rework_evidence_codes = [
+        diag.code
+        for diag in status.diagnostics
+        if diag.code == "rework_review_output_declaration_unrecognized"
+    ]
+    if rework_evidence_codes:
+        return _frontier_result(
+            PlanningFrontierOutcome.INVALID,
+            [f"invalid rework evidence state: {code}" for code in rework_evidence_codes],
         )
 
     # Decision 6 resolution 5: a block requires both a safe citation and a
