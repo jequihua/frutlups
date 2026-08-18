@@ -128,6 +128,44 @@ def default_review_report_schema() -> ReviewReportSchema:
     )
 
 
+def review_report_format_contract(
+    schema: ReviewReportSchema | None = None,
+) -> tuple[str, ...]:
+    """Return canonical verdict guidance derived from parser vocabulary.
+
+    The result is ready to render as Markdown list items.  Constructible
+    malformed collection shapes and unusable entries return deterministic
+    guidance or the empty fail-closed signal rather than raising.
+    """
+
+    effective = default_review_report_schema() if schema is None else schema
+    allowed = getattr(effective, "allowed_verdicts", ())
+    if not isinstance(allowed, (tuple, list)):
+        return ()
+    values: list[str] = []
+    for entry in allowed:
+        value = entry.value if isinstance(entry, ReviewVerdict) else entry
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+    if not values:
+        return ()
+    escaped = tuple(
+        value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+        for value in values
+    )
+    return (
+        "End the report with a ## Verdict section whose ATX heading text is exactly Verdict.",
+        "Make the first non-empty line under that section exactly "
+        "Verdict: <value> - next: <one move>.",
+        "Choose <value> as exactly one of: " + ", ".join(f'"{value}"' for value in escaped) + ".",
+        "Use ASCII space-hyphen-space followed by lowercase next: and one space; "
+        "an em dash or en dash is rejected.",
+        "Put nothing between <value> and the separator: no severity tag, count, or parenthetical.",
+        "Make <one move> non-empty.",
+        "State one chosen verdict, never the list of verdict choices.",
+    )
+
+
 def validate_review_report_schema(
     schema: ReviewReportSchema,
 ) -> tuple[str, ...]:

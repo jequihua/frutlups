@@ -598,6 +598,8 @@ class ReviewPromptRenderResult:
 def render_review_prompt(
     template: ReviewPromptTemplate,
     posture_path: str | None = None,
+    *,
+    review_report_contract: tuple[str, ...] = (),
 ) -> ReviewPromptRenderResult:
     """Render a deterministic review-prompt markdown body for ``template``.
 
@@ -624,7 +626,11 @@ def render_review_prompt(
             errors=errors,
         )
     return ReviewPromptRenderResult(
-        content=_render_review_markdown(template, posture_path=posture_path),
+        content=_render_review_markdown(
+            template,
+            posture_path=posture_path,
+            review_report_contract=review_report_contract,
+        ),
         valid=True,
         errors=(),
     )
@@ -634,7 +640,10 @@ _DEFAULT_LEGACY_POSTURE_PATH = "05_governance/llloom_operating_model.md"
 
 
 def _render_review_markdown(
-    template: ReviewPromptTemplate, posture_path: str | None = None
+    template: ReviewPromptTemplate,
+    posture_path: str | None = None,
+    *,
+    review_report_contract: tuple[str, ...] = (),
 ) -> str:
     posture = posture_path if posture_path else _DEFAULT_LEGACY_POSTURE_PATH
     sequence_text = format_prompt_sequence(template.sequence) or "???"
@@ -740,6 +749,10 @@ def _render_review_markdown(
     lines.append("")
     lines.append("State the verdict after the severity-ordered findings.")
     lines.append("")
+    for entry in review_report_contract:
+        lines.append(f"- {entry}")
+    if review_report_contract:
+        lines.append("")
 
     if template.non_goals:
         lines.append("## Non-Goals")

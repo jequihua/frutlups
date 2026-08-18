@@ -70,7 +70,9 @@ from frutlups.review_report import (
     ReviewReportVerdictParseCommand,
     ReviewReportVerdictParseResult,
     ReviewVerdict,
+    default_review_report_schema,
     parse_review_report_verdict,
+    review_report_format_contract,
 )
 from frutlups.rework import (
     MAX_REWORK_DECLARATIONS,
@@ -89,6 +91,7 @@ from frutlups.self_report import (
     SelfReportLocationCommand,
     SelfReportValidationCommand,
     SelfReportValidationResult,
+    self_report_format_contract,
     self_report_schema_for_profile,
     validate_expected_self_report,
 )
@@ -1728,6 +1731,9 @@ def _build_coding_prompt_plan_from_status(
 
     frontier = _build_frontier_from_status(status)
     profile = status.layout.profile if status.layout is not None else legacy_profile()
+    self_report_contract = self_report_format_contract(
+        self_report_schema_for_profile(profile)
+    )
 
     if evidence is None:
         evidence = _collect_acceptance_evidence(status.root, profile)
@@ -1937,7 +1943,9 @@ def _build_coding_prompt_plan_from_status(
                 template,
                 required_reading=_dedup_append(template.required_reading, posture_reading),
             )
-        render = _render_coding_from_scaffold(status, profile, template)
+        render = _render_coding_from_scaffold(
+            status, profile, template, self_report_contract
+        )
     else:
         # Genuine legacy compatibility path: the memory query snippet may remain
         # only here and only under the historical root behavior (M011-S01 D3).
@@ -1952,11 +1960,19 @@ def _build_coding_prompt_plan_from_status(
                 query=f"{slice_id} {title}",
                 runner=memory_runner,
             )
-        render = render_coding_prompt(
-            template,
-            snippet=snippet if (snippet is not None and snippet.has_content) else None,
-            posture_path=profile.llloom_posture_file or None,
-        )
+        if not self_report_contract:
+            render = CodingPromptRenderResult(
+                content="",
+                valid=False,
+                errors=(_CODING_REPORT_FORMAT_CONTRACT_ERROR,),
+            )
+        else:
+            render = render_coding_prompt(
+                template,
+                snippet=snippet if (snippet is not None and snippet.has_content) else None,
+                posture_path=profile.llloom_posture_file or None,
+                self_report_contract=self_report_contract,
+            )
     if render.valid and profile.prompt_pairing == "workflow_metadata":
         # M003-S02 (owner note 008): under the configured metadata pairing
         # the generated coding prompt must carry the same validated fenced
@@ -3522,7 +3538,11 @@ def _dedup_append(existing: tuple[str, ...], additions: tuple[str, ...]) -> tupl
     return tuple(result)
 
 
-def _coding_scaffold_slots(profile: LayoutProfile, template: CodingPromptTemplate) -> dict:
+def _coding_scaffold_slots(
+    profile: LayoutProfile,
+    template: CodingPromptTemplate,
+    self_report_contract: tuple[str, ...] = (),
+) -> dict:
     """The exact coding field-to-section mapping for the scaffold renderer.
 
     Keyed by normalized owned section heading; role-configured names are read
@@ -3554,7 +3574,9 @@ def _coding_scaffold_slots(profile: LayoutProfile, template: CodingPromptTemplat
             "path", (template.self_report_path,), label="self-report"
         ),
         "definition of done": ScaffoldSlot(
-            "list", tuple(template.definition_of_done), label="definition of done"
+            "list",
+            tuple(template.definition_of_done) + tuple(self_report_contract),
+            label="definition of done",
         ),
     }
 
@@ -3594,7 +3616,11 @@ def _review_read_first_values(template: ReviewPromptTemplate) -> tuple[str, ...]
     return tuple(values)
 
 
-def _review_scaffold_slots(profile: LayoutProfile, template: ReviewPromptTemplate) -> dict:
+def _review_scaffold_slots(
+    profile: LayoutProfile,
+    template: ReviewPromptTemplate,
+    review_report_contract: tuple[str, ...] = (),
+) -> dict:
     """The exact review field-to-section mapping for the scaffold renderer."""
 
     return {
@@ -3619,13 +3645,55 @@ def _review_scaffold_slots(profile: LayoutProfile, template: ReviewPromptTemplat
             "list",
             (
                 f"Write the review report at `{template.review_output_path}`.",
-                "Use exactly one verdict value from: "
-                + ", ".join(template.verdict_choices)
-                + ".",
-            ),
+            )
+            + tuple(review_report_contract),
             label="definition of done",
         ),
     }
+
+
+_CODING_REPORT_FORMAT_CONTRACT_ERROR = (
+    "coding report-format contract defect in package-owned definition of done section"
+)
+_REVIEW_REPORT_FORMAT_CONTRACT_ERROR = (
+    "review report-format contract defect in package-owned definition of done section"
+)
+
+
+def _report_format_contract_present(
+    content: str, contract: tuple[str, ...]
+) -> bool:
+    """Whether every contract line is one exact renderer-tolerated list item."""
+
+    if not contract:
+        return False
+    lines = {line.strip() for line in content.splitlines()}
+    return all(f"- {line}" in lines for line in contract)
+
+
+def _definition_of_done_missing_error(
+    errors: tuple[str, ...], required_sections: tuple[str, ...]
+) -> str | None:
+    """The exact missing error for the package-owned section, when present."""
+
+    for position, name in enumerate(required_sections, 1):
+        if normalize_section(name) == "definition of done":
+            missing = f"required section {position} is missing"
+            return missing if missing in errors else None
+    return None
+
+
+def _replace_definition_of_done_missing_error(
+    errors: tuple[str, ...],
+    required_sections: tuple[str, ...],
+    replacement: str,
+) -> tuple[str, ...]:
+    """Replace only the package-owned missing error, preserving its peers."""
+
+    missing = _definition_of_done_missing_error(errors, required_sections)
+    if missing is None:
+        return errors
+    return tuple(replacement if error == missing else error for error in errors)
 
 
 def _round_trip_identity_errors(
@@ -3690,10 +3758,18 @@ def _reconciled_preview(preview, render):
 
 
 def _render_coding_from_scaffold(
-    status: ProjectStatus, profile: LayoutProfile, template: CodingPromptTemplate
+    status: ProjectStatus,
+    profile: LayoutProfile,
+    template: CodingPromptTemplate,
+    self_report_contract: tuple[str, ...] | None = None,
 ) -> CodingPromptRenderResult:
     """Render the coding prompt through the configured scaffold (M003-S03)."""
 
+    contract = (
+        self_report_format_contract(self_report_schema_for_profile(profile))
+        if self_report_contract is None
+        else self_report_contract
+    )
     content, errors = render_configured_scaffold(
         root=status.root,
         template_rel=profile.coding_template,
@@ -3702,8 +3778,13 @@ def _render_coding_from_scaffold(
             (profile.front_matter_milestone_field, template.milestone_id),
             (profile.front_matter_slice_field, template.slice_id),
         ),
-        section_slots=_coding_scaffold_slots(profile, template),
+        section_slots=_coding_scaffold_slots(profile, template, contract),
         owner="coding",
+    )
+    errors = _replace_definition_of_done_missing_error(
+        errors,
+        profile.required_coding_prompt_sections,
+        _CODING_REPORT_FORMAT_CONTRACT_ERROR,
     )
     if not errors:
         errors = _round_trip_identity_errors(
@@ -3715,6 +3796,8 @@ def _render_coding_from_scaffold(
             "coding",
             check_self_report=True,
         )
+    if not errors and not _report_format_contract_present(content, contract):
+        errors = (_CODING_REPORT_FORMAT_CONTRACT_ERROR,)
     return CodingPromptRenderResult(
         content="" if errors else content,
         valid=not errors,
@@ -3723,10 +3806,18 @@ def _render_coding_from_scaffold(
 
 
 def _render_review_from_scaffold(
-    status: ProjectStatus, profile: LayoutProfile, template: ReviewPromptTemplate
+    status: ProjectStatus,
+    profile: LayoutProfile,
+    template: ReviewPromptTemplate,
+    review_report_contract: tuple[str, ...] | None = None,
 ) -> ReviewPromptRenderResult:
     """Render the review prompt through the configured scaffold (M003-S03)."""
 
+    contract = (
+        review_report_format_contract()
+        if review_report_contract is None
+        else review_report_contract
+    )
     content, errors = render_configured_scaffold(
         root=status.root,
         template_rel=profile.review_template,
@@ -3735,8 +3826,13 @@ def _render_review_from_scaffold(
             (profile.front_matter_milestone_field, template.milestone_id),
             (profile.front_matter_slice_field, template.slice_id),
         ),
-        section_slots=_review_scaffold_slots(profile, template),
+        section_slots=_review_scaffold_slots(profile, template, contract),
         owner="review",
+    )
+    errors = _replace_definition_of_done_missing_error(
+        errors,
+        profile.required_review_prompt_sections,
+        _REVIEW_REPORT_FORMAT_CONTRACT_ERROR,
     )
     if not errors:
         errors = _round_trip_identity_errors(
@@ -3748,6 +3844,8 @@ def _render_review_from_scaffold(
             "review",
             check_self_report=False,
         )
+    if not errors and not _report_format_contract_present(content, contract):
+        errors = (_REVIEW_REPORT_FORMAT_CONTRACT_ERROR,)
     return ReviewPromptRenderResult(
         content="" if errors else content,
         valid=not errors,
@@ -4279,6 +4377,7 @@ def _build_review_prompt_plan_from_status(
     """
     frontier = _build_frontier_from_status(status)
     profile = status.layout.profile if status.layout is not None else legacy_profile()
+    review_contract = review_report_format_contract()
 
     errors: list[str] = []
 
@@ -4482,7 +4581,10 @@ def _build_review_prompt_plan_from_status(
             "affect correctness",
             "nit: cosmetic observations that a reviewer may note but should not block acceptance",
         ),
-        verdict_choices=("pass", "needs_work", "blocked", "override"),
+        verdict_choices=tuple(
+            verdict.value
+            for verdict in default_review_report_schema().allowed_verdicts
+        ),
         prior_review_paths=("05_governance/reviews/m008_s02_make_coding_prompt_review_report.md",),
         non_goals=meta.non_goals,
         notes=(),
@@ -4500,11 +4602,22 @@ def _build_review_prompt_plan_from_status(
                 review_template,
                 required_reading=_dedup_append(review_template.required_reading, posture_reading),
             )
-        render = _render_review_from_scaffold(status, profile, review_template)
-    else:
-        render = render_review_prompt(
-            review_template, posture_path=profile.llloom_posture_file or None
+        render = _render_review_from_scaffold(
+            status, profile, review_template, review_contract
         )
+    else:
+        if not review_contract:
+            render = ReviewPromptRenderResult(
+                content="",
+                valid=False,
+                errors=(_REVIEW_REPORT_FORMAT_CONTRACT_ERROR,),
+            )
+        else:
+            render = render_review_prompt(
+                review_template,
+                posture_path=profile.llloom_posture_file or None,
+                review_report_contract=review_contract,
+            )
     preview = preview_review_prompt(review_template, prompt_dir=profile.review_prompt_dir)
     preview = _reconciled_preview(preview, render)
 

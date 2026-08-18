@@ -446,6 +446,19 @@ human-authored mistakes visible instead of normalising them.
 """
 
 
+_SELF_REPORT_FALLBACK_FIELDS: tuple[str, ...] = (
+    "files changed",
+    "behavior implemented",
+    "tests added or updated",
+    "verification commands and results",
+    "live status summary",
+    "known limits and intentional deferrals",
+    "memory usage statement",
+    "matching review prompt path created by the coder",
+    "blockers or open questions",
+)
+
+
 @dataclass(frozen=True)
 class CodingPromptRenderResult:
     """Rendered markdown content for a coding prompt.
@@ -472,6 +485,8 @@ def render_coding_prompt(
     template: CodingPromptTemplate,
     snippet: MemoryPromptSnippet | None = None,
     posture_path: str | None = None,
+    *,
+    self_report_contract: tuple[str, ...] = (),
 ) -> CodingPromptRenderResult:
     """Render a deterministic coding-prompt markdown body for ``template``.
 
@@ -508,7 +523,12 @@ def render_coding_prompt(
             errors=tuple(errors),
         )
 
-    content = _render_markdown(template, snippet=snippet, posture_path=posture_path)
+    content = _render_markdown(
+        template,
+        snippet=snippet,
+        posture_path=posture_path,
+        self_report_contract=self_report_contract,
+    )
     return CodingPromptRenderResult(
         content=content,
         valid=True,
@@ -523,6 +543,8 @@ def _render_markdown(
     template: CodingPromptTemplate,
     snippet: MemoryPromptSnippet | None = None,
     posture_path: str | None = None,
+    *,
+    self_report_contract: tuple[str, ...] = (),
 ) -> str:
     posture = posture_path if posture_path else _DEFAULT_LEGACY_POSTURE_PATH
     sequence_text = format_prompt_sequence(template.sequence)
@@ -595,15 +617,9 @@ def _render_markdown(
     lines.append("")
     lines.append("The self-report must include, at minimum:")
     lines.append("")
-    lines.append("- files changed")
-    lines.append("- behavior implemented")
-    lines.append("- tests added or updated")
-    lines.append("- verification commands and results")
-    lines.append("- live status summary")
-    lines.append("- known limits and intentional deferrals")
-    lines.append("- memory usage statement")
-    lines.append("- matching review prompt path created by the coder")
-    lines.append("- blockers or open questions")
+    report_lines = self_report_contract or _SELF_REPORT_FALLBACK_FIELDS
+    for entry in report_lines:
+        lines.append(f"- {entry}")
     lines.append("")
 
     lines.append("## Matching Review Prompt")

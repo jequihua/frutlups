@@ -114,6 +114,38 @@ def default_self_report_schema() -> SelfReportSchema:
     )
 
 
+def self_report_format_contract(
+    schema: SelfReportSchema | None = None,
+) -> tuple[str, ...]:
+    """Return canonical prompt guidance derived from the effective schema.
+
+    The result is ready to render as Markdown list items.  Malformed collection
+    shapes and unusable entries are ignored without raising; an empty tuple is
+    the fail-closed signal that no usable required field remains.
+    """
+
+    effective = default_self_report_schema() if schema is None else schema
+    required = getattr(effective, "required_fields", ())
+    if not isinstance(required, (tuple, list)):
+        return ()
+    fields = tuple(entry.strip() for entry in required if isinstance(entry, str) and entry.strip())
+    if not fields:
+        return ()
+    escaped = tuple(
+        field.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+        for field in fields
+    )
+    return (
+        "Required self-report section names: " + "; ".join(f'"{field}"' for field in escaped) + ".",
+        "Give each required section its own heading, either ## Name or a Name: line "
+        "starting at the beginning of a line.",
+        "Use each listed section name; only letter case and trailing punctuation may differ.",
+        "Give every required section non-empty content; write none instead of leaving it blank.",
+        "A heading inside a fenced code block, a list item, or a table is not recognized.",
+        "Text before the first heading is ignored.",
+    )
+
+
 def self_report_schema_from_headings(headings: tuple[str, ...]) -> SelfReportSchema:
     """Build a self-report schema from configured required headings.
 

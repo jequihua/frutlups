@@ -261,7 +261,14 @@ class ConfiguredSelectionTests(unittest.TestCase):
             self.assertTrue(plan.valid, plan.errors)
             direct = render_coding_prompt(plan.template)
             self.assertTrue(direct.valid)
-            self.assertEqual(plan.render.content, direct.content)
+            # Q008 keeps the direct public call byte-stable while the composer
+            # deliberately supplies the reader-derived report contract.
+            self.assertNotEqual(plan.render.content, direct.content)
+            for line in project_module.self_report_format_contract(
+                project_module.self_report_schema_for_profile(build_status(root).layout.profile)
+            ):
+                self.assertIn(f"- {line}", plan.render.content)
+                self.assertNotIn(f"- {line}", direct.content)
             self.assertTrue(plan.render.content.startswith("# Coding Prompt 001:"))
 
 
@@ -515,10 +522,12 @@ class ReviewScaffoldTests(unittest.TestCase):
             "- Write the review report at `05_governance/reviews/m001_s01_first_slice_review_report.md`.",
             content,
         )
-        self.assertIn(
+        self.assertNotIn(
             "- Use exactly one verdict value from: pass, needs_work, blocked, override.",
             content,
         )
+        for line in project_module.review_report_format_contract():
+            self.assertIn(f"- {line}", content)
         self.assertNotIn("TBD", content)
 
 
@@ -1209,7 +1218,11 @@ class LegacyAndSurfacePreservationTests(unittest.TestCase):
             _make_legacy_project(root)
             plan = build_coding_prompt_plan(root)
             direct = render_coding_prompt(plan.template)
-            self.assertEqual(plan.render.content, direct.content)
+            self.assertNotEqual(plan.render.content, direct.content)
+            self.assertEqual(
+                render_coding_prompt(plan.template).content,
+                direct.content,
+            )
 
     def test_no_new_module_export(self) -> None:
         self.assertEqual(len(frutlups.__all__), 152)
