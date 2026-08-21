@@ -18,6 +18,9 @@ _SIMPLE_PASS = "# Review Report\n\n## Verdict\n\npass\n\n## Findings\n\n- ok\n"
 _SIMPLE_NEEDS_WORK = "## Verdict\n\nneeds_work\n"
 _SIMPLE_BLOCKED = "## Verdict\n\nblocked\n"
 _SIMPLE_OVERRIDE = "## Verdict\n\noverride\n"
+_MULTIPLE_VERDICT_SECTIONS_ERROR = (
+    "multiple verdict sections found; refusing to resolve an ambiguous verdict"
+)
 
 
 class EachCanonicalVerdictTests(unittest.TestCase):
@@ -175,6 +178,23 @@ class InlineVerdictLineTests(unittest.TestCase):
 
 
 class FlexibleHeadingTests(unittest.TestCase):
+    def test_each_atx_level_and_casing_still_parses(self):
+        headings = (
+            "Verdict",
+            "VERDICT",
+            "verdict",
+            "VeRdIcT",
+            "Verdict",
+            "VERDICT",
+        )
+        for level, heading in enumerate(headings, start=1):
+            with self.subTest(level=level, heading=heading):
+                r = parse_review_report_verdict_text(
+                    f"{'#' * level} {heading}\n\npass\n"
+                )
+                self.assertTrue(r.valid)
+                self.assertEqual(r.verdict, ReviewVerdict.PASS)
+
     def test_level_1(self):
         r = parse_review_report_verdict_text("# Verdict\n\npass\n")
         self.assertTrue(r.valid)
@@ -190,6 +210,39 @@ class FlexibleHeadingTests(unittest.TestCase):
     def test_lowercase_heading_text(self):
         r = parse_review_report_verdict_text("## verdict\n\npass\n")
         self.assertTrue(r.valid)
+
+
+class MultipleVerdictSectionTests(unittest.TestCase):
+    def test_two_sections_refuse_in_either_order(self):
+        for first, second in (("needs_work", "pass"), ("pass", "needs_work")):
+            with self.subTest(first=first, second=second):
+                r = parse_review_report_verdict_text(
+                    f"## Verdict\n\n{first}\n\n## Findings\n\n- x\n\n"
+                    f"## Verdict\n\n{second}\n"
+                )
+                self.assertIsNone(r.verdict)
+                self.assertEqual(r.raw_verdict, "")
+                self.assertFalse(r.valid)
+                self.assertEqual(r.errors, (_MULTIPLE_VERDICT_SECTIONS_ERROR,))
+
+    def test_three_sections_refuse(self):
+        r = parse_review_report_verdict_text(
+            "# Verdict\n\nneeds_work\n\n"
+            "### VERDICT\n\nblocked\n\n"
+            "###### verdict\n\npass\n"
+        )
+        self.assertIsNone(r.verdict)
+        self.assertEqual(r.raw_verdict, "")
+        self.assertFalse(r.valid)
+        self.assertEqual(r.errors, (_MULTIPLE_VERDICT_SECTIONS_ERROR,))
+
+    def test_one_heading_plus_inline_verdict_elsewhere_is_not_multiple(self):
+        r = parse_review_report_verdict_text(
+            "Verdict: pass\n\n## Verdict\n\nneeds_work\n\n"
+            "## Notes\n\nVerdict: pass\n"
+        )
+        self.assertTrue(r.valid)
+        self.assertEqual(r.verdict, ReviewVerdict.NEEDS_WORK)
 
 
 class IgnoredPreVerdictTextTests(unittest.TestCase):
@@ -384,6 +437,23 @@ class FileCommandSuccessTests(unittest.TestCase):
             cmd = ReviewReportVerdictParseCommand(path=tmp)
             r = parse_review_report_verdict(cmd)
             self.assertIn(str(tmp), r.path)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def test_file_command_propagates_multiple_section_refusal(self):
+        content = "## Verdict\n\nneeds_work\n\n## Verdict\n\npass\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(content)
+            tmp = Path(f.name)
+        try:
+            r = parse_review_report_verdict(ReviewReportVerdictParseCommand(path=tmp))
+            self.assertEqual(r.path, str(tmp))
+            self.assertIsNone(r.verdict)
+            self.assertEqual(r.raw_verdict, "")
+            self.assertFalse(r.valid)
+            self.assertEqual(r.errors, (_MULTIPLE_VERDICT_SECTIONS_ERROR,))
         finally:
             tmp.unlink(missing_ok=True)
 

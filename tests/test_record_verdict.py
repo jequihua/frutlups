@@ -19,6 +19,11 @@ from frutlups.review_report import ReviewVerdict
 from frutlups.state import NextActionKind
 
 
+_MULTIPLE_VERDICT_SECTIONS_ERROR = (
+    "multiple verdict sections found; refusing to resolve an ambiguous verdict"
+)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -344,6 +349,87 @@ class MalformedVerdictTests(unittest.TestCase):
         rr = self.root / "05_governance" / "reviews" / "m001_s01_first_slice_review_report.md"
         plan = build_verdict_record_plan(self.root, rr)
         self.assertTrue(plan.errors)
+
+
+class MultipleVerdictRefusalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._td = TemporaryDirectory()
+        self.root = Path(self._td.name)
+        _make_template(self.root)
+        _write_detailed_roadmap(
+            self.root,
+            _milestone_block("M001", "Test", [("M001-S01", "first slice")]),
+        )
+        self.report = (
+            self.root
+            / "05_governance"
+            / "reviews"
+            / "m001_s01_first_slice_review_report.md"
+        )
+        self.report.write_text(
+            "# Round 1\n\n## Verdict\n\nneeds_work\n\n"
+            "# Round 2\n\n## Verdict\n\npass\n",
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self._td.cleanup()
+
+    def test_dry_run_refuses_without_writing(self) -> None:
+        before = {
+            path.relative_to(self.root)
+            for path in self.root.rglob("*")
+            if path.is_file()
+        }
+        code, out, err = _run(
+            [
+                "record-verdict",
+                str(self.root),
+                "--review-report",
+                str(self.report),
+                "--dry-run",
+            ]
+        )
+        after = {
+            path.relative_to(self.root)
+            for path in self.root.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn(_MULTIPLE_VERDICT_SECTIONS_ERROR, err)
+        self.assertEqual(after, before)
+        self.assertFalse(
+            (
+                self.root
+                / "05_governance"
+                / "reviews"
+                / "m001_s01_first_slice_verdict_record.md"
+            ).exists()
+        )
+
+
+class RoundQualifiedFilenameTests(unittest.TestCase):
+    def test_round_qualified_report_still_infers_slice_id(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_template(root)
+            _write_detailed_roadmap(
+                root,
+                _milestone_block("M001", "Test", [("M001-S01", "first slice")]),
+            )
+            name = "m001_s01_first_slice_round_002_review_report.md"
+            _write_review_report(root, name, "pass")
+            plan = build_verdict_record_plan(
+                root, root / "05_governance" / "reviews" / name
+            )
+            self.assertTrue(plan.valid, plan.errors)
+            self.assertEqual(plan.reviewed_slice.slice_id, "M001-S01")
+            self.assertEqual(
+                plan.target_path,
+                "05_governance/reviews/"
+                "m001_s01_first_slice_round_002_verdict_record.md",
+            )
 
 
 class UnparseableFilenameTests(unittest.TestCase):

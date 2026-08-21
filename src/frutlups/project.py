@@ -140,6 +140,10 @@ _PROMPT_SELF_REPORT_PATH_RE = re.compile(
     r"`([^`]*_self_report\.md)`",
     re.IGNORECASE,
 )
+_CORRECTION_ROUND_STEM_RE = re.compile(
+    r"_round_(?P<round>\d{3})$", re.IGNORECASE
+)
+_MAX_WORKFLOW_ROUND = 999
 
 
 @dataclass(frozen=True)
@@ -1650,6 +1654,7 @@ def build_coding_prompt_plan(
     *,
     sequence: int | None = None,
     slug: str | None = None,
+    correction_round: int | None = None,
     memory_runner: MemoryCommandRunner | None = None,
     layout_config: Path | str | None = None,
 ) -> CodingPromptPlan:
@@ -1670,6 +1675,7 @@ def build_coding_prompt_plan(
         status,
         sequence=sequence,
         slug=slug,
+        correction_round=correction_round,
         memory_runner=memory_runner,
         evidence=evidence,
     )
@@ -1683,7 +1689,10 @@ def _workflow_metadata_yaml_value(value: str) -> str:
 
 
 def _with_workflow_metadata_block(
-    content: str, template: CodingPromptTemplate, profile: LayoutProfile
+    content: str,
+    template: CodingPromptTemplate,
+    profile: LayoutProfile,
+    correction_round: int | None = None,
 ) -> str:
     """Inject the canonical fenced workflow-metadata block after the title.
 
@@ -1695,6 +1704,11 @@ def _with_workflow_metadata_block(
     scalar.
     """
 
+    round_line = (
+        f"round: {correction_round}\n"
+        if correction_round is not None and correction_round >= 2
+        else ""
+    )
     block = (
         "Workflow metadata:\n"
         "\n"
@@ -1703,6 +1717,7 @@ def _with_workflow_metadata_block(
         f"{profile.front_matter_slice_field}: {template.slice_id}\n"
         f"{profile.front_matter_title_field}: "
         f"{_workflow_metadata_yaml_value(template.title)}\n"
+        f"{round_line}"
         "role: coder\n"
         "```\n"
     )
@@ -1719,6 +1734,7 @@ def _build_coding_prompt_plan_from_status(
     *,
     sequence: int | None = None,
     slug: str | None = None,
+    correction_round: int | None = None,
     memory_runner: MemoryCommandRunner | None = None,
     evidence: "_AcceptanceEvidence | None" = None,
 ) -> CodingPromptPlan:
@@ -1774,12 +1790,31 @@ def _build_coding_prompt_plan_from_status(
     elif sequence > MAX_PROMPT_SEQUENCE:
         errors.append(f"sequence must be at most {MAX_PROMPT_SEQUENCE}")
 
+    valid_correction_round = correction_round is None or (
+        isinstance(correction_round, int)
+        and not isinstance(correction_round, bool)
+        and 1 <= correction_round <= _MAX_WORKFLOW_ROUND
+    )
+    if not valid_correction_round:
+        errors.append(
+            f"correction round must be an integer from 1 to {_MAX_WORKFLOW_ROUND}"
+        )
+    ordinary_correction_round = (
+        correction_round
+        if valid_correction_round
+        and correction_round is not None
+        and correction_round >= 2
+        else None
+    )
+
     declaration = rework.active_declaration
     if declaration is not None and sequence is not None:
         if sequence <= declaration.baseline_prompt_sequence:
             errors.append(
                 "rework coding-prompt sequence must be newer than the declaration baseline"
             )
+    if declaration is not None and ordinary_correction_round is not None:
+        errors.append("correction rounds cannot be combined with an active rework declaration")
 
     if slug is None:
         slug = _derive_slug(inferred_slice.slice_id, inferred_slice.title)
@@ -1821,6 +1856,8 @@ def _build_coding_prompt_plan_from_status(
             f"_rework_{declaration.declaration_sequence:03d}_"
             f"{declaration.pass_id}_{sequence:03d}"
         )
+    elif ordinary_correction_round is not None:
+        evidence_stem += f"_round_{ordinary_correction_round:03d}"
     self_report_path = f"{profile.reviews_dir}/{evidence_stem}{profile.self_report_suffix}"
 
     is_memory_update = frontier.slice_kind == SliceKind.MEMORY_UPDATE
@@ -1982,7 +2019,9 @@ def _build_coding_prompt_plan_from_status(
         # loop and the resume step could never advance past it.
         render = replace(
             render,
-            content=_with_workflow_metadata_block(render.content, template, profile),
+            content=_with_workflow_metadata_block(
+                render.content, template, profile, correction_round
+            ),
         )
     preview = preview_coding_prompt(template, prompt_dir=profile.coding_prompt_dir)
     preview = _reconciled_preview(preview, render)
@@ -2304,6 +2343,14 @@ def _slice_artifact_re(suffix: str) -> "re.Pattern[str]":
         r"^(?P<milestone>m\d+)_(?P<slice>s\d+)_.*" + re.escape(suffix) + r"$",
         re.IGNORECASE,
     )
+
+
+def _artifact_correction_round(name: str, suffix: str) -> int:
+    """Return a report/record filename's terminal correction round."""
+
+    stem = name[: -len(suffix)]
+    match = _CORRECTION_ROUND_STEM_RE.search(stem)
+    return int(match.group("round")) if match else 1
 
 
 def _cap_evidence_diagnostic(message: str) -> str:
@@ -2758,6 +2805,17 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
         elif name_cf.endswith(report_suffix_cf):
             report_entries.append((entry, entry_rel))
 
+    highest_report_rounds: dict[str, int] = {}
+    for report, _ in report_entries:
+        match = report_re.match(report.name)
+        if not match:
+            continue
+        slice_id = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
+        round_value = _artifact_correction_round(report.name, profile.review_report_suffix)
+        highest_report_rounds[slice_id] = max(
+            round_value, highest_report_rounds.get(slice_id, round_value)
+        )
+
     accepted: list[str] = []
     passing_reports: dict[str, str] = {}
     for report, report_entry_rel in report_entries:
@@ -2775,9 +2833,14 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
                 )
             )
             continue
+        slice_id = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
+        if (
+            _artifact_correction_round(report.name, profile.review_report_suffix)
+            < highest_report_rounds[slice_id]
+        ):
+            continue
         if not _has_pass_verdict(report):
             continue
-        slice_id = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
         passing_reports[report_entry_rel] = slice_id
         if slice_id not in accepted:
             accepted.append(slice_id)
@@ -2790,6 +2853,11 @@ def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _Accepta
         if not match:
             continue
         record_slice = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
+        if (
+            _artifact_correction_round(record.name, profile.verdict_record_suffix)
+            < highest_report_rounds.get(record_slice, 1)
+        ):
+            continue
         stem = record.name[: -len(profile.verdict_record_suffix)]
         # The same-directory sibling is the safe expected label, so nested
         # records pair beside themselves rather than at the reviews root.
@@ -3320,7 +3388,7 @@ def _workflow_round_value(mapping: dict[str, object]) -> int | None:
     """Return the validated ``round`` metadata value, or ``None``.
 
     Accepted only after the region schema validated the mapping: a plain
-    integer or all-digit string in ``1..999``. Anything else — booleans,
+        integer or all-digit string in ``1..999``. Anything else — booleans,
     other types, zero/negative, or an out-of-range run — is ``None`` (no
     repair, no filename inference).
     """
@@ -3331,10 +3399,10 @@ def _workflow_round_value(mapping: dict[str, object]) -> int | None:
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
-            return value if 1 <= value <= 999 else None
+            return value if 1 <= value <= _MAX_WORKFLOW_ROUND else None
         if isinstance(value, str) and value.strip().isdigit():
             number = int(value.strip())
-            return number if 1 <= number <= 999 else None
+            return number if 1 <= number <= _MAX_WORKFLOW_ROUND else None
         return None
     return None
 

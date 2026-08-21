@@ -1,14 +1,29 @@
 """Tests for M008-S02: frutlups make-coding-prompt command and CodingPromptPlan."""
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 import unittest
+from unittest import mock
 
 from frutlups.cli import main
-from frutlups.project import CodingPromptPlan, build_coding_prompt_plan, _derive_slug
+from frutlups.project import (
+    CodingPromptPlan,
+    VerdictRecordWriteCommand,
+    _build_status_with_evidence,
+    _derive_slug,
+    build_coding_prompt_plan,
+    build_rework_declaration_plan,
+    build_verdict_record_plan,
+    write_verdict_record,
+)
+from frutlups.rework import (
+    ReworkDeclarationWriteCommand,
+    write_rework_declaration,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +314,112 @@ class SequenceValidationTests(unittest.TestCase):
     def test_sequence_999_accepted(self) -> None:
         plan = build_coding_prompt_plan(self.root, sequence=999)
         self.assertTrue(plan.valid)
+
+
+class CorrectionRoundTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _simple_project(self.root)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _metadata_status(self):
+        status, evidence = _build_status_with_evidence(self.root)
+        profile = replace(status.layout.profile, prompt_pairing="workflow_metadata")
+        layout = replace(status.layout, profile=profile)
+        return replace(status, layout=layout), evidence
+
+    def test_cli_round_two_qualifies_path_and_emits_truthful_metadata(self) -> None:
+        status, evidence = self._metadata_status()
+        with mock.patch(
+            "frutlups.cli._build_status_with_evidence",
+            return_value=(status, evidence),
+        ):
+            code, output = _run_mcp(
+                self.root,
+                ["--correction-round", "2", "--dry-run", "--json"],
+            )
+        payload = json.loads(output)
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            payload["template"]["self_report_path"],
+            "05_governance/reviews/"
+            "m002_s01_next_thing_round_002_self_report.md",
+        )
+        self.assertIn(
+            "\nround: 2\nrole: coder\n",
+            payload["render"]["content"],
+        )
+
+    def test_omitted_and_round_one_plans_are_byte_identical(self) -> None:
+        omitted = build_coding_prompt_plan(self.root)
+        round_one = build_coding_prompt_plan(self.root, correction_round=1)
+        self.assertEqual(round_one.to_dict(), omitted.to_dict())
+
+    def test_round_one_workflow_metadata_plan_is_byte_identical(self) -> None:
+        status, evidence = self._metadata_status()
+        with mock.patch(
+            "frutlups.project._build_status_with_evidence",
+            return_value=(status, evidence),
+        ):
+            omitted = build_coding_prompt_plan(self.root)
+            round_one = build_coding_prompt_plan(self.root, correction_round=1)
+        self.assertEqual(round_one.to_dict(), omitted.to_dict())
+        self.assertNotIn("\nround:", round_one.render.content)
+
+    def test_invalid_round_values_fail_closed(self) -> None:
+        for value in (0, -1, 1000, True, "2", 2.0):
+            with self.subTest(value=value):
+                plan = build_coding_prompt_plan(self.root, correction_round=value)
+                self.assertFalse(plan.valid)
+                self.assertTrue(any("correction round" in error for error in plan.errors))
+
+    def test_cli_non_integer_round_is_rejected(self) -> None:
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit) as raised:
+            _run_mcp(self.root, ["--correction-round", "two", "--dry-run"])
+        self.assertNotEqual(raised.exception.code, 0)
+
+    def test_active_rework_and_round_two_refuse(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_template(root)
+            _write_active_roadmap(
+                root,
+                "# Active Roadmap\n\n### M001: First\n\nStatus: active\n\n",
+            )
+            _write_detailed_roadmap(
+                root,
+                "# Detailed Roadmap\n\n### M001: First\n\n"
+                "Slices:\n\n- M001-S01: first slice\n\n",
+            )
+            name = "m001_s01_first_slice_review_report.md"
+            _write_review_report(root, name, "pass")
+            verdict = build_verdict_record_plan(
+                root, root / "05_governance" / "reviews" / name
+            )
+            self.assertTrue(verdict.valid, verdict.errors)
+            receipt = write_verdict_record(
+                VerdictRecordWriteCommand(project_root=root, plan=verdict)
+            )
+            self.assertTrue(receipt.wrote)
+            declaration = build_rework_declaration_plan(
+                root,
+                pass_id="corrective_pass_001",
+                slice_ids=("M001-S01",),
+            )
+            self.assertTrue(declaration.valid, declaration.errors)
+            declared = write_rework_declaration(
+                ReworkDeclarationWriteCommand(project_root=root, plan=declaration)
+            )
+            self.assertTrue(declared.wrote)
+            plan = build_coding_prompt_plan(root, correction_round=2)
+            self.assertFalse(plan.valid)
+            self.assertIn(
+                "correction rounds cannot be combined with an active rework declaration",
+                plan.errors,
+            )
 
 
 # ---------------------------------------------------------------------------

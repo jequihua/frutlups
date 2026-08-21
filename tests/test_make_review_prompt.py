@@ -182,6 +182,7 @@ class CliHelpTests(unittest.TestCase):
         self.assertIn("--overwrite", output)
         self.assertIn("--sequence", output)
         self.assertIn("--slug", output)
+        self.assertNotIn("--correction-round", output)
 
 
 # ---------------------------------------------------------------------------
@@ -871,6 +872,35 @@ class CodingPromptMetaTests(unittest.TestCase):
         plan = build_review_prompt_plan(self.root)
         serialized = json.dumps(plan.coding_prompt_meta.to_dict())
         self.assertIsInstance(serialized, str)
+
+
+class RoundQualifiedReviewOutputTests(unittest.TestCase):
+    def test_round_two_coding_prompt_derives_matching_review_output(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_template(root)
+            _write_active_roadmap(
+                root, "# Active Roadmap\n\n### M001: Only\n\nStatus: active\n\n"
+            )
+            self_report = (
+                "05_governance/reviews/"
+                "m001_s01_test_slice_round_002_self_report.md"
+            )
+            _write_coding_prompt(
+                root,
+                _CP_FILENAME_001,
+                _minimal_coding_prompt(1, self_report_path=self_report),
+            )
+            _write_self_report(root, self_report, _minimal_self_report())
+            plan = build_review_prompt_plan(root)
+            expected = (
+                "05_governance/reviews/"
+                "m001_s01_test_slice_round_002_review_report.md"
+            )
+            self.assertTrue(plan.valid, plan.errors)
+            self.assertEqual(plan.coding_prompt_meta.review_output_path, expected)
+            self.assertEqual(plan.template.review_output_path, expected)
+            self.assertIn(f"Review output: `{expected}`", plan.render.content)
 
 
 # ---------------------------------------------------------------------------

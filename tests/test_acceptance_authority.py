@@ -163,6 +163,18 @@ class AcceptedDirectionTests(unittest.TestCase):
                 _write_review_report(root, RR.rsplit("/", 1)[-1], verdict)
                 self.assertNotIn("M001-S01", _evidence(root).accepted_slice_ids)
 
+    def test_two_verdict_report_with_last_pass_never_accepts(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _in_flight_project(root)
+            (root / RR).write_text(
+                "## Verdict\n\nneeds_work\n\n## Verdict\n\npass\n",
+                encoding="utf-8",
+            )
+            evidence = _evidence(root)
+            self.assertNotIn("M001-S01", evidence.accepted_slice_ids)
+            self.assertEqual(evidence.pass_reports, ())
+
     def test_valid_cited_receipt_clears_record_verdict_without_regression(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -191,6 +203,73 @@ class AcceptedDirectionTests(unittest.TestCase):
             # and the loop routes back to record_verdict for the receipt.
             self.assertIn("M001-S01", _evidence(root).accepted_slice_ids)
             self.assertEqual(_resume(root).step, LoopResumeStep.RECORD_VERDICT)
+
+
+class CorrectiveRoundAcceptanceTests(unittest.TestCase):
+    def test_round_one_pass_round_two_needs_work_is_unaccepted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _in_flight_project(root)
+            _write_review_report(root, RR.rsplit("/", 1)[-1], "pass")
+            _write_record(root, _generated_record(RR))
+            _write_review_report(
+                root,
+                "m001_s01_first_slice_round_002_review_report.md",
+                "needs_work",
+            )
+            evidence = _evidence(root)
+            self.assertNotIn("M001-S01", evidence.accepted_slice_ids)
+            self.assertEqual(evidence.pass_reports, ())
+            self.assertEqual(evidence.unrecorded_pass_reports, ())
+            self.assertEqual(evidence.contradictions, ())
+
+    def test_round_one_needs_work_round_two_pass_accepts_from_round_two(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _in_flight_project(root)
+            _write_review_report(root, RR.rsplit("/", 1)[-1], "needs_work")
+            round_two = (
+                "05_governance/reviews/"
+                "m001_s01_first_slice_round_002_review_report.md"
+            )
+            _write_review_report(root, round_two.rsplit("/", 1)[-1], "pass")
+            evidence = _evidence(root)
+            self.assertIn("M001-S01", evidence.accepted_slice_ids)
+            self.assertEqual(evidence.pass_reports, (round_two,))
+            self.assertEqual(evidence.unrecorded_pass_reports, (round_two,))
+
+    def test_unqualified_report_counts_as_round_one(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _in_flight_project(root)
+            _write_review_report(root, RR.rsplit("/", 1)[-1], "pass")
+            evidence = _evidence(root)
+            self.assertEqual(evidence.accepted_slice_ids, ("M001-S01",))
+            self.assertEqual(evidence.pass_reports, (RR,))
+
+    def test_round_selection_is_isolated_per_slice(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _in_flight_project(root)
+            _write_review_report(root, RR.rsplit("/", 1)[-1], "pass")
+            _write_review_report(
+                root,
+                "m001_s01_first_slice_round_002_review_report.md",
+                "needs_work",
+            )
+            _write_review_report(
+                root, "m001_s02_second_slice_review_report.md", "needs_work"
+            )
+            round_three = (
+                "05_governance/reviews/"
+                "m001_s02_second_slice_round_003_review_report.md"
+            )
+            _write_review_report(root, round_three.rsplit("/", 1)[-1], "pass")
+            evidence = _evidence(root)
+            self.assertNotIn("M001-S01", evidence.accepted_slice_ids)
+            self.assertIn("M001-S02", evidence.accepted_slice_ids)
+            self.assertEqual(evidence.pass_reports, (round_three,))
+            self.assertEqual(evidence.unrecorded_pass_reports, (round_three,))
 
 
 def _assert_contradiction(

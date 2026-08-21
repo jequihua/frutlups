@@ -295,6 +295,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 status,
                 sequence=args.sequence,
                 slug=args.slug,
+                correction_round=args.correction_round,
                 evidence=evidence,
             )
             if blockers:
@@ -847,6 +848,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     mcp_parser.add_argument(
         "--slug", type=str, default=None, help="override the computed prompt slug"
+    )
+    mcp_parser.add_argument(
+        "--correction-round",
+        type=int,
+        default=None,
+        metavar="N",
+        help="ordinary corrective round (1-999; rounds 2+ qualify report paths)",
     )
 
     rework_parser = subparsers.add_parser(

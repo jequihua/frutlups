@@ -4,21 +4,23 @@ Status: accepted product surface; future changes require reviewed compatibility 
 
 ## Authoritative Product Surface
 
-The public product surface is defined by `pyproject.toml`, `src/frutlups/__init__.py`, the installed
+The public product surface is defined by `08_pkg/pyproject.toml`,
+`08_pkg/src/frutlups/__init__.py`, the installed
 distribution metadata, the console entry point, and the product's own tests. This document is a
 boundary summary, not a second API source.
 
 ## Preserved Public Surface
 
-- Distribution and import name `frutlups`, version `0.1.3`, and Python `>=3.11`.
+- Distribution and import name `frutlups`, and Python `>=3.11`.
 - The `frutlups` console entry point and nine top-level CLI verbs.
 - The package `__all__` export set and every resolving public name.
 - Documented dataclass and JSON shapes, including default text and JSON behavior.
 - `py.typed`, source-package discovery, the optional `dev` extra, and installed wheel/sdist behavior.
 - The exported `parse_simple_yaml` name.
 
-Export and verb counts are re-derived from the installed package rather than declared as permanent
-constants here.
+The released version and the export and verb counts are re-derived from the installed package
+rather than declared as permanent constants here. A version pinned in this document goes stale
+at the next release; the distribution metadata is the source of truth.
 
 ## Compatibility And Authority
 
@@ -45,6 +47,14 @@ The committed layout config carries two reviewed opt-in closed vocabularies:
 historical behavior; unknown values for the new keys are ERROR diagnostics that
 fall back to the default rather than changing pairing or evidence semantics.
 See `README.md` for their behavior.
+
+The `make-coding-prompt` verb additionally accepts `--correction-round N`, where
+`N` is an integer from 1 through 999. Omission and round 1 preserve the prior
+output byte-for-byte. Ordinary rounds 2 through 999 append a terminal
+`_round_NNN` marker to the generated self-report stem (and therefore to the
+review-report path derived by `make-review-prompt`); workflow-metadata pairing
+also emits the bare integer `round` value. An active accepted-slice rework
+declaration cannot be combined with an ordinary round 2+ correction.
 
 ## References
 

@@ -281,6 +281,9 @@ _FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 _LIST_PREFIX_RE = re.compile(r"^(?:-|\*|\d+[.)]) +")
 _BACKTICK_RE = re.compile(r"^`(.+)`$")
 _INLINE_VERDICT_RE = re.compile(r"^verdict\s*:\s*(.+?)\s*$", re.IGNORECASE)
+_MULTIPLE_VERDICT_SECTIONS_ERROR = (
+    "multiple verdict sections found; refusing to resolve an ambiguous verdict"
+)
 
 # Bounded parser-compatibility rule for the accepted historical footer
 # ``Verdict: <verdict> - next: <recommended next move>`` (M003 governance
@@ -377,6 +380,9 @@ def parse_review_report_verdict_text(
     match by accident. A present-but-empty ``## Verdict`` section stays invalid
     even if a later line says ``Verdict: pass``.
 
+    More than one matching verdict heading is ambiguous and refuses before
+    candidate extraction; no first- or last-section precedence is applied.
+
     Footer compatibility rule (M003, Coding Prompt 030): the accepted
     historical footer ``Verdict: <verdict> - next: <recommended move>`` parses
     to the bare verdict token, both under a ``## Verdict`` heading and in the
@@ -416,6 +422,15 @@ def parse_review_report_verdict_text(
         effective_schema = default_review_report_schema()
 
     lines = content.splitlines()
+    verdict_heading_count = sum(
+        1
+        for line in lines
+        if (heading_match := _VERDICT_HEADING_RE.match(line))
+        and heading_match.group(1).strip().lower() == "verdict"
+    )
+    if verdict_heading_count > 1:
+        return _fail(_MULTIPLE_VERDICT_SECTIONS_ERROR)
+
     in_verdict_section = False
     verdict_candidate_raw: str | None = None
 
