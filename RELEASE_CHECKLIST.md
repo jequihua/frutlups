@@ -45,7 +45,7 @@ git status --short
 .\.venv\Scripts\python.exe -m mypy
 ```
 
-- Expect the recorded baseline, **not** a clean result. As of 0.1.7 the accepted source
+- Expect the recorded baseline, **not** a clean result. As of 0.1.6 the accepted source
   reports 27 errors in 5 files: `union-attr` 7, `arg-type` 7, `attr-defined` 6,
   `assignment` 5, `no-redef` 1, `import-untyped` 1.
 - The gate is that a release introduces **no new finding**, not that the count is zero.
@@ -60,7 +60,7 @@ git status --short
 .\.venv\Scripts\python.exe -m ruff format --check .
 ```
 
-- Expect the recorded baseline, **not** a clean result. As of 0.1.7 the accepted source
+- Expect the recorded baseline, **not** a clean result. As of 0.1.6 the accepted source
   reports 31 findings, and the formatter would reformat 11 files.
 - The gate is that a release introduces **no new finding**, not that the count is zero.
   Compare against the prior release's recorded baseline and investigate any increase.

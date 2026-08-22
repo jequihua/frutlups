@@ -1808,6 +1808,17 @@ def _build_coding_prompt_plan_from_status(
     )
 
     declaration = rework.active_declaration
+    if correction_round is None and declaration is None:
+        ordinary_correction_round = _detect_ordinary_correction_round(
+            inferred_slice.slice_id, profile, status.root
+        )
+        if (
+            ordinary_correction_round is not None
+            and ordinary_correction_round > _MAX_WORKFLOW_ROUND
+        ):
+            errors.append(
+                f"correction round must be an integer from 1 to {_MAX_WORKFLOW_ROUND}"
+            )
     if declaration is not None and sequence is not None:
         if sequence <= declaration.baseline_prompt_sequence:
             errors.append(
@@ -2020,7 +2031,7 @@ def _build_coding_prompt_plan_from_status(
         render = replace(
             render,
             content=_with_workflow_metadata_block(
-                render.content, template, profile, correction_round
+                render.content, template, profile, ordinary_correction_round
             ),
         )
     preview = preview_coding_prompt(template, prompt_dir=profile.coding_prompt_dir)
@@ -2670,6 +2681,107 @@ def _contained_review_inventory(
             inventory.append((entry, f"{reviews_rel}/{rel}"))
     inventory.sort(key=lambda pair: pair[1])
     return inventory
+
+
+def _detect_ordinary_correction_round(
+    slice_id: str, profile: LayoutProfile, root: Path
+) -> int | None:
+    """Return the next ordinary correction round from review evidence.
+
+    The scan mirrors the accepted acceptance-evidence containment, discovery,
+    suffix-classification, and highest-round boundaries.  A highest-round
+    ``needs_work`` or invalid report advances by exactly one; ``pass``,
+    ``blocked``, another valid verdict, absent evidence, and every scan/read or
+    containment defect retain round-one generation.  Returning 1000 lets the
+    two prompt-plan call sites use their existing fail-closed plan-error
+    channel.  Never writes or raises.
+    """
+
+    reviews_dir_abs = root / profile.reviews_dir
+    reviews_rel = profile.reviews_dir.rstrip("/")
+    try:
+        if not reviews_dir_abs.is_dir():
+            return None
+        resolved_root = root.resolve()
+        resolved_reviews = reviews_dir_abs.resolve()
+    except (OSError, RuntimeError):
+        return None
+    if not _is_within(resolved_reviews, resolved_root):
+        return None
+
+    try:
+        if profile.reports_discovery == "recursive_contained":
+            inventory = _contained_review_inventory(reviews_dir_abs, reviews_rel)
+        else:
+            inventory = sorted(
+                (
+                    (entry, f"{reviews_rel}/{entry.name}")
+                    for entry in reviews_dir_abs.iterdir()
+                    if entry.is_file()
+                ),
+                key=lambda pair: pair[1],
+            )
+    except (OSError, RuntimeError, _DiscoveryBoundExceeded):
+        return None
+
+    report_re = _slice_artifact_re(profile.review_report_suffix)
+    report_suffix_cf = profile.review_report_suffix.casefold()
+    record_suffix_cf = profile.verdict_record_suffix.casefold()
+    wanted_slice = slice_id.upper()
+    matches: list[tuple[Path, int]] = []
+    for entry, _entry_rel in inventory:
+        name_cf = entry.name.casefold()
+        if name_cf.endswith(record_suffix_cf) or not name_cf.endswith(report_suffix_cf):
+            continue
+        match = report_re.match(entry.name)
+        if match is None:
+            continue
+        report_slice = f"{match.group('milestone').upper()}-{match.group('slice').upper()}"
+        if report_slice != wanted_slice:
+            continue
+        try:
+            if not _is_within(entry.resolve(), resolved_reviews):
+                return None
+        except (OSError, RuntimeError):
+            return None
+        matches.append(
+            (
+                entry,
+                _artifact_correction_round(entry.name, profile.review_report_suffix),
+            )
+        )
+
+    if not matches:
+        return None
+    highest_round = max(round_value for _path, round_value in matches)
+    highest_reports = [
+        path for path, round_value in matches if round_value == highest_round
+    ]
+    for report in highest_reports:
+        parsed = parse_review_report_verdict(
+            ReviewReportVerdictParseCommand(path=report)
+        )
+        if not parsed.valid and any(
+            error.startswith(
+                (
+                    "file not found:",
+                    "path is a directory:",
+                    "could not read file:",
+                    "invalid path",
+                    "path must be a Path instance",
+                )
+            )
+            for error in parsed.errors
+        ):
+            return None
+        if parsed.valid and parsed.verdict in (
+            ReviewVerdict.PASS,
+            ReviewVerdict.BLOCKED,
+        ):
+            return None
+        if parsed.valid and parsed.verdict != ReviewVerdict.NEEDS_WORK:
+            return None
+    return highest_round + 1
 
 
 def _collect_acceptance_evidence(root: Path, profile: LayoutProfile) -> _AcceptanceEvidence:
@@ -4552,6 +4664,43 @@ def _build_review_prompt_plan_from_status(
     if not effective_slug:
         errors.append("could not derive a slug for the review prompt")
         return _make_invalid_review_plan(frontier, sequence, "", errors, selected_artifact, meta)
+
+    inferred_slice = frontier.inferred_slice
+    rework_governs_slice = (
+        inferred_slice is not None
+        and inferred_slice.slice_id.upper() == meta.slice_id.upper()
+        and meta.slice_id.upper() in {item.upper() for item in frontier.accepted_slice_ids}
+    )
+    ordinary_correction_round = (
+        None
+        if rework_governs_slice
+        else _detect_ordinary_correction_round(meta.slice_id, profile, frontier.root)
+    )
+    if (
+        ordinary_correction_round is not None
+        and ordinary_correction_round > _MAX_WORKFLOW_ROUND
+    ):
+        errors.append(
+            f"correction round must be an integer from 1 to {_MAX_WORKFLOW_ROUND}"
+        )
+        return _make_invalid_review_plan(
+            frontier, sequence, effective_slug, errors, selected_artifact, meta
+        )
+    if ordinary_correction_round is not None:
+        self_report_stem = meta.self_report_path[: -len(profile.self_report_suffix)]
+        review_output_stem = meta.review_output_path[: -len(profile.review_report_suffix)]
+        self_report_stem = _CORRECTION_ROUND_STEM_RE.sub("", self_report_stem)
+        review_output_stem = _CORRECTION_ROUND_STEM_RE.sub("", review_output_stem)
+        marker = f"_round_{ordinary_correction_round:03d}"
+        meta = replace(
+            meta,
+            self_report_path=(
+                f"{self_report_stem}{marker}{profile.self_report_suffix}"
+            ),
+            review_output_path=(
+                f"{review_output_stem}{marker}{profile.review_report_suffix}"
+            ),
+        )
 
     coding_template = CodingPromptTemplate(
         sequence=coding_sequence,

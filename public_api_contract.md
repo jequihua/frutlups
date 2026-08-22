@@ -49,12 +49,19 @@ fall back to the default rather than changing pairing or evidence semantics.
 See `README.md` for their behavior.
 
 The `make-coding-prompt` verb additionally accepts `--correction-round N`, where
-`N` is an integer from 1 through 999. Omission and round 1 preserve the prior
+`N` is an integer from 1 through 999. An explicit value keeps authority over
+automatic detection; explicit round 1 preserves round-1 output byte-for-byte.
+When the flag is omitted and no accepted-slice rework declaration governs the
+slice, both prompt generators inspect the highest round of matching review
+reports. The declared self-report and review-report family advances by exactly
+one only when at least one highest-round report exists and every such report is
+either `needs_work` or invalid/unparseable. Any highest-round `pass` or
+`blocked`, any other valid verdict, or no matching report preserves round-1
 output byte-for-byte. Ordinary rounds 2 through 999 append a terminal
-`_round_NNN` marker to the generated self-report stem (and therefore to the
-review-report path derived by `make-review-prompt`); workflow-metadata pairing
-also emits the bare integer `round` value. An active accepted-slice rework
-declaration cannot be combined with an ordinary round 2+ correction.
+`_round_NNN` marker to both declared stems, and workflow-metadata coding prompts
+emit the same bare integer `round` value. An active accepted-slice rework
+declaration cannot be combined with an ordinary round 2+ correction and is
+never auto-detected as one.
 
 ## References
 
