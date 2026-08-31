@@ -713,7 +713,7 @@ class BoundedTextTests(_BadLayoutCase):
 
 
 class PublicSurfaceTests(unittest.TestCase):
-    def test_nine_verb_inventory_by_parser_choices(self) -> None:
+    def test_twelve_verb_inventory_by_parser_choices(self) -> None:
         from frutlups.cli import _build_parser
 
         parser = _build_parser()
@@ -725,7 +725,10 @@ class PublicSurfaceTests(unittest.TestCase):
         self.assertEqual(
             sorted(subparsers.choices),
             [
+                "corrective-publish",
                 "declare-rework",
+                "drive-frontier",
+                "drive-payload",
                 "make-coding-prompt",
                 "make-review-prompt",
                 "next",

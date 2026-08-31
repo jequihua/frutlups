@@ -493,6 +493,7 @@ class IsolatedBaseInstallTests(_BuiltArtifactTestCase):
                     "from importlib import metadata\n"
                     "print(json.dumps({\n"
                     "    'frutlups_version': metadata.version('frutlups'),\n"
+                    "    'module_version': frutlups.__version__,\n"
                     "    'pyyaml_version': metadata.version('PyYAML'),\n"
                     "    'frutlups_file': frutlups.__file__,\n"
                     "    'yaml_file': yaml.__file__,\n"
@@ -518,6 +519,13 @@ class IsolatedBaseInstallTests(_BuiltArtifactTestCase):
             )
             self.assertGreaterEqual(version, (6, 0, 3), observed["pyyaml_version"])
             self.assertLess(version, (7,), observed["pyyaml_version"])
+
+            # One truthful release identity (M007-R1-F1): the source project
+            # version, the installed distribution metadata, and the installed
+            # public module attribute all equal 0.2.1 — no surface may diverge.
+            self.assertEqual(_source_project()["version"], "0.2.1")
+            self.assertEqual(observed["frutlups_version"], "0.2.1")
+            self.assertEqual(observed["module_version"], "0.2.1")
 
             # Both imports resolve inside the isolated environment, never from the
             # package source tree, and the probe ran outside the package workspace.

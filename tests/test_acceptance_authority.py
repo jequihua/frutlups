@@ -2578,7 +2578,7 @@ class PublicSurfaceTests(unittest.TestCase):
             for action in _build_parser()._actions
             if isinstance(action, argparse._SubParsersAction)
         )
-        self.assertEqual(len(subparsers.choices), 9)
+        self.assertEqual(len(subparsers.choices), 12)
 
     def test_no_s06_fields_in_status_or_next_json(self) -> None:
         with TemporaryDirectory() as tmp:

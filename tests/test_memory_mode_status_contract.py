@@ -61,7 +61,7 @@ class PublicContractTests(unittest.TestCase):
         self.assertEqual(len(set(frutlups.__all__)), 152)
 
     def test_release_version_is_0_1_2(self) -> None:
-        self.assertEqual(frutlups.__version__, "0.1.8")
+        self.assertEqual(frutlups.__version__, "0.2.1")
 
     def test_dataclass_shape_is_exact(self) -> None:
         value = MemoryModeStatus(

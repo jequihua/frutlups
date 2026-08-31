@@ -735,7 +735,7 @@ class PublicSurfaceTests(unittest.TestCase):
             for action in _build_parser()._actions
             if isinstance(action, argparse._SubParsersAction)
         )
-        self.assertEqual(len(subparsers.choices), 9)
+        self.assertEqual(len(subparsers.choices), 12)
 
 
 # ---------------------------------------------------------------------------
@@ -1910,7 +1910,7 @@ class HeadingPurityAndSurfaceTests(unittest.TestCase):
             for action in _build_parser()._actions
             if isinstance(action, argparse._SubParsersAction)
         )
-        self.assertEqual(len(subparsers.choices), 9)
+        self.assertEqual(len(subparsers.choices), 12)
 
 
 # ---------------------------------------------------------------------------

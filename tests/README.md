@@ -9,6 +9,13 @@ python -m pip install ".[dev]"
 python -m unittest discover -s tests
 ```
 
+The public suite is self-contained in the source distribution. Released
+contract and Drive-consumer authority used by portability tests lives under
+`tests/fixtures/release_v0_2_0/` with a complete digest/provenance manifest; no
+test needs a parent development repository or an ignored sibling checkout.
+Generated `__pycache__` directories are inert and ignored by fixture-topology
+checks, so the ordinary command above is stable without special bytecode flags.
+
 The suite covers the CLI verbs and their text/JSON contracts, project discovery
 and roadmap parsing, the planning-frontier and loop-resume surfaces, the versioned
 memory-declaration status contract, the bounded single-artifact write paths

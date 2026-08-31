@@ -10,6 +10,10 @@ All commands run from the `08_pkg/` package workspace using the project Python
 floor: `requires-python = ">=3.11"` and mypy/ruff target `py311`). Invoke the
 interpreter explicitly as `.\.venv\Scripts\python.exe`, or activate the venv with
 `.\.venv\Scripts\Activate.ps1`. Do not use the machine-global interpreter.
+The only exception is the editable install in step 1, which runs from the
+repository root: the composed project validator (`tools/run_project_validation.py`)
+also needs the root `artifact-first-project-template` distribution installed
+into that same environment.
 
 ## 1. Environment setup / dev install
 
@@ -18,12 +22,23 @@ interpreter explicitly as `.\.venv\Scripts\python.exe`, or activate the venv wit
 py -3.11 -m venv .venv
 
 .\.venv\Scripts\python.exe --version          # expect: Python 3.11.x
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# from the repository root: install BOTH repository distributions into the one
+# venv — the root template project and the product with its dev extra — plus
+# the build frontend. `build` provisions pyproject.toml's declared build-system
+# requirements in an isolated environment; wheel remains explicit release
+# tooling for local inspection and fallback diagnostics.
+08_pkg\.venv\Scripts\python.exe -m pip install -e . -e ".\08_pkg[dev]" build wheel
 ```
 
-The `dev` extra installs the type checker and linter (`mypy`, `ruff`). Building
-distributions additionally needs `build` or `wheel` (see step 8); install
-`wheel` into the venv if a wheel build reports `invalid command 'bdist_wheel'`.
+Installing only `08_pkg[dev]` leaves the composed validator's root
+installed-metadata control skipped; installing both repository distributions
+makes that control run. Never borrow packages through the user site or
+`PYTHONPATH`: every check in this checklist runs inside this one venv.
+
+The `dev` extra installs the type checker and linter (`mypy`, `ruff`). The
+separately installed `build` frontend creates an isolated build environment and
+provisions the exact `[build-system].requires` declared by `pyproject.toml`.
 
 ## 2. Clean working tree
 
@@ -72,6 +87,31 @@ git status --short
   were recorded at 0.1.6 and have not been measured against an earlier tree. Reducing
   either is separate, unscheduled work.
 
+### Same-tool baseline comparison (mypy and Ruff)
+
+"Compare against the prior release's recorded baseline" is a mechanical step,
+not a judgment call. Materialize the exact prior-release `08_pkg` bytes beneath
+the ignored local-state root, then run the **same** venv interpreter and the
+**same** mypy/Ruff versions against the baseline tree and the candidate tree,
+normalize repository-relative paths (and line references embedded in finding
+messages), and compare the finding `(path, code, message)` multisets plus the
+`ruff format --check` would-reformat path sets. The candidate sets must equal
+the accepted baseline sets; any addition is release-blocking debt to close or
+explicitly route, never to suppress.
+
+```powershell
+# from the repository root, with the prior release commit available:
+git archive <prior-release-commit> -- 08_pkg > local_state\<baseline>.tar
+# extract beneath local_state\, then from each tree root run:
+#   <venv>\Scripts\python.exe -m mypy --no-error-summary
+#   <venv>\Scripts\python.exe -m ruff check . --output-format concise
+#   <venv>\Scripts\python.exe -m ruff format --check .
+```
+
+Record the exact Python, mypy, and Ruff versions beside every result; counts
+vary with checker version, so a comparison across tool versions is not
+evidence.
+
 ## 5. Full test suite
 
 ```powershell
@@ -109,34 +149,17 @@ git status --short
 
 ## 7. Package build (source distribution and wheel)
 
-Build into a temporary directory so nothing is published and no byproducts are
-left in the tree. If the `build` frontend is installed, prefer it; otherwise use
-`setuptools.build_meta` directly (no broad tooling required):
+Build into a bounded local directory so nothing is published. The `build`
+frontend installed in step 1 creates an isolated environment and provisions the
+declared `setuptools>=77` and `wheel` build requirements; do not import whatever
+`setuptools` version happens to be present in the release venv as the backend.
 
 ```powershell
-# preferred, if installed:
 .\.venv\Scripts\python.exe -m build --outdir .dist_check
 ```
 
-```powershell
-# fallback probe with no extra frontend (wheel build needs the `wheel` package):
-.\.venv\Scripts\python.exe -c @"
-import tempfile, os, shutil
-from setuptools import build_meta
-out = tempfile.mkdtemp()
-try:
-    print('sdist:', build_meta.build_sdist(out))
-    print('wheel:', build_meta.build_wheel(out))
-finally:
-    shutil.rmtree(out, ignore_errors=True)
-"@
-```
-
-After building, remove any local byproducts:
-
-```powershell
-Remove-Item -Recurse -Force build, dist, .dist_check, src\frutlups.egg-info -ErrorAction SilentlyContinue
-```
+Keep `.dist_check` through step 8 so the exact artifacts just built are the ones
+inspected. Remove all local build byproducts after that inspection.
 
 ## 8. `py.typed` is included in built artifacts
 
@@ -145,20 +168,21 @@ Remove-Item -Recurse -Force build, dist, .dist_check, src\frutlups.egg-info -Err
 
 ```powershell
 .\.venv\Scripts\python.exe -c @"
-import tempfile, os, tarfile, zipfile, shutil
-from setuptools import build_meta
-out = tempfile.mkdtemp()
-try:
-    s = build_meta.build_sdist(out)
-    with tarfile.open(os.path.join(out, s)) as t:
-        assert any(n.endswith('py.typed') for n in t.getnames()), 'py.typed missing from sdist'
-    w = build_meta.build_wheel(out)
-    with zipfile.ZipFile(os.path.join(out, w)) as z:
-        assert any(n.endswith('py.typed') for n in z.namelist()), 'py.typed missing from wheel'
-    print('py.typed present in sdist and wheel')
-finally:
-    shutil.rmtree(out, ignore_errors=True)
+from pathlib import Path
+import tarfile, zipfile
+out = Path('.dist_check')
+sdists = list(out.glob('*.tar.gz'))
+wheels = list(out.glob('*.whl'))
+assert len(sdists) == 1, f'expected one sdist, found {sdists}'
+assert len(wheels) == 1, f'expected one wheel, found {wheels}'
+with tarfile.open(sdists[0]) as archive:
+    assert any(n.endswith('py.typed') for n in archive.getnames()), 'py.typed missing from sdist'
+with zipfile.ZipFile(wheels[0]) as archive:
+    assert any(n.endswith('py.typed') for n in archive.namelist()), 'py.typed missing from wheel'
+print('py.typed present in sdist and wheel')
 "@
+
+Remove-Item -Recurse -Force build, dist, .dist_check, src\frutlups.egg-info -ErrorAction SilentlyContinue
 ```
 
 The test suite also guards this invariant
@@ -206,6 +230,13 @@ Confirm the loop state reflects this:
 ```powershell
 .\.venv\Scripts\python.exe -m frutlups status ..
 ```
+
+For a release that is projected into a flatter public repository, repeat the
+complete source suite from a fresh projection or extracted sdist after installing
+that candidate in an isolated environment. This target-topology run is mandatory:
+byte equality with the development tree does not prove that test fixture paths
+are portable. The public suite must not read the parent development repository,
+an ignored checkout, or any machine-local authority.
 
 ## 11. Manual publish (explicit post-check — not run by this checklist)
 

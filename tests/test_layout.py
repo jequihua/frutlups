@@ -998,7 +998,7 @@ class AdvisoryDiagnosticsTests(unittest.TestCase):
 
 
 _LOCAL_V2_EXAMPLE = (
-    Path(__file__).resolve().parents[2] / "docs" / "config_files" / "v2" / "frutlups.layout.yaml"
+    Path(__file__).resolve().parent / "fixtures" / "release_v0_2_0" / "frutlups.layout.yaml"
 )
 
 
@@ -1026,11 +1026,8 @@ class LocalV2ConfigExampleTests(unittest.TestCase):
         self.assertEqual(self.profile.self_report_required_headings[0], "Intent")
         self.assertEqual(self.profile.self_report_required_headings[-1], "Recommended Next Move")
 
-    def test_redesign_command_surfaced_as_advisory(self) -> None:
-        self.assertEqual(
-            self.profile.validation_command_redesign,
-            "python -m unittest discover -s 08_new_template/tests",
-        )
+    def test_current_validation_command_has_no_stale_redesign_advisory(self) -> None:
+        self.assertEqual(self.profile.validation_command_redesign, "")
         self.assertEqual(self.profile.validation_command, "python -m unittest discover -s tests")
 
     def test_semantic_fields_still_present(self) -> None:
@@ -1473,7 +1470,10 @@ class UnchangedPublicSurfaceTests(unittest.TestCase):
         self.assertEqual(
             sorted(subparsers.choices),
             [
+                "corrective-publish",
                 "declare-rework",
+                "drive-frontier",
+                "drive-payload",
                 "make-coding-prompt",
                 "make-review-prompt",
                 "next",

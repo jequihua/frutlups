@@ -8,6 +8,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from frutlups import drive_seam
+from frutlups.closure import FrutlupsRoute
 from frutlups.exceptions import FrutlupsError
 from frutlups.gate import (
     FinalMilestoneHandoff,
@@ -84,6 +86,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.command in _DRIVE_VERBS:
+        # M005-S02: the Drive seam verbs emit exactly one machine JSON document
+        # and their own exit semantics; they never share the text/FrutlupsError
+        # paths below.
+        result_drive = _run_drive_verb(args)
+        _write_machine_document(drive_seam.serialize_document(result_drive.document))
+        return result_drive.exit_code
 
     try:
         if args.command == "status":
@@ -459,6 +469,57 @@ def main(argv: Sequence[str] | None = None) -> int:
     except FrutlupsError as exc:
         print(f"frutlups: {exc}", file=sys.stderr)
         return 2
+
+
+_DRIVE_VERBS = (drive_seam.VERB_PAYLOAD, drive_seam.VERB_FRONTIER, drive_seam.VERB_PUBLISH)
+
+
+def _run_drive_verb(args: argparse.Namespace) -> drive_seam.SeamResult:
+    if args.command == drive_seam.VERB_PAYLOAD:
+        return drive_seam.run_drive_payload(
+            project_root=args.project_root,
+            sidecar=args.sidecar,
+            slice_id=args.slice,
+            prompt=args.prompt,
+            version=args.version,
+        )
+    if args.command == drive_seam.VERB_FRONTIER:
+        return drive_seam.run_drive_frontier(
+            project_root=args.project_root,
+            sidecar=args.sidecar,
+            slice_id=args.slice,
+            review_report=args.review_report,
+            version=args.version,
+            explicit_routing_status=args.explicit_routing_status,
+        )
+    return drive_seam.run_corrective_publish(
+        project_root=args.project_root,
+        sidecar=args.sidecar,
+        prompt=args.prompt,
+        version=args.version,
+        proposal_bytes=_read_proposal_stdin(),
+        dry_run=args.dry_run,
+    )
+
+
+def _read_proposal_stdin() -> bytes:
+    """Read at most one byte beyond the proposal bound so oversize is observable."""
+
+    stream = getattr(sys.stdin, "buffer", None)
+    if stream is None:
+        return sys.stdin.read(drive_seam.INPUT_MAX_BYTES + 1).encode("utf-8")
+    return stream.read(drive_seam.INPUT_MAX_BYTES + 1)
+
+
+def _write_machine_document(data: bytes) -> None:
+    stream = getattr(sys.stdout, "buffer", None)
+    if stream is None:
+        sys.stdout.write(data.decode("utf-8"))
+        sys.stdout.flush()
+        return
+    sys.stdout.flush()
+    stream.write(data)
+    stream.flush()
 
 
 _TOP_DESCRIPTION = """\
@@ -918,6 +979,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--overwrite", action="store_true", help="replace an existing verdict record"
     )
 
+    _add_drive_seam_parsers(subparsers)
+
     # All loop commands accept an explicit layout/profile config. When omitted, the
     # profile is auto-detected (project frutlups.layout.yaml, else a v2 default when
     # PROJECT_STATE.md is present, else the legacy compatibility fallback).
@@ -941,6 +1004,122 @@ def _build_parser() -> argparse.ArgumentParser:
         )
 
     return parser
+
+
+_DRIVE_SEAM_EPILOG = """\
+Drive seam verbs (M005-S02) emit exactly one UTF-8 JSON document on stdout and
+nothing else; stderr carries only argparse usage. Exit 0 is a valid document or
+a validated/published receipt, exit 2 is usage, exit 3 carries a
+frutlups.drive_seam_refusal.v1 document (or a publication receipt with outcome
+refused), and exit 4 carries a publication receipt with outcome
+recovery_required. PROJECT_ROOT and every governed path are explicit; the
+current directory and the environment are not contract inputs.
+"""
+
+
+def _add_drive_seam_parsers(subparsers) -> None:
+    payload = subparsers.add_parser(
+        drive_seam.VERB_PAYLOAD,
+        help="emit the versioned Drive payload wrapper for one sidecar entry (read-only)",
+        description=(
+            "Emit frutlups.drive_payload.v1: the unmodified M001 slice payload"
+            " plus an adoption block of exact identities."
+        ),
+        epilog=_DRIVE_SEAM_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    payload.add_argument(
+        "project_root", metavar="PROJECT_ROOT", help="repository root of the governed project"
+    )
+    payload.add_argument(
+        "--sidecar", required=True, metavar="SIDECAR", help="repository-relative sidecar path"
+    )
+    payload.add_argument(
+        "--slice", required=True, metavar="SLICE", help="slice identity (Mnnn-Snn)"
+    )
+    payload.add_argument(
+        "--prompt",
+        required=True,
+        metavar="PROMPT",
+        help="repository-relative rendered coding prompt",
+    )
+    payload.add_argument(
+        "--version", required=True, metavar="N", help="wrapper schema version (supported: 1)"
+    )
+
+    frontier = subparsers.add_parser(
+        drive_seam.VERB_FRONTIER,
+        help="emit the frontier-v2 routing transition for one reviewed slice (read-only)",
+        description=(
+            "Emit frutlups.frontier.v2 from the review report's closure record;"
+            " milestone and last-slice position are derived from the sidecar."
+        ),
+        epilog=_DRIVE_SEAM_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    frontier.add_argument(
+        "project_root", metavar="PROJECT_ROOT", help="repository root of the governed project"
+    )
+    frontier.add_argument(
+        "--sidecar", required=True, metavar="SIDECAR", help="repository-relative sidecar path"
+    )
+    frontier.add_argument(
+        "--slice", required=True, metavar="SLICE", help="slice identity (Mnnn-Snn)"
+    )
+    frontier.add_argument(
+        "--review-report",
+        required=True,
+        metavar="REPORT",
+        help="repository-relative accepted review report",
+    )
+    frontier.add_argument(
+        "--version", required=True, metavar="N", help="frontier schema version (supported: 2)"
+    )
+    frontier.add_argument(
+        "--explicit-routing-status",
+        default=None,
+        metavar="ROUTE",
+        choices=[route.value for route in FrutlupsRoute],
+        help="the operating tool's explicit routing status (one of the six route values)",
+    )
+
+    publish = subparsers.add_parser(
+        drive_seam.VERB_PUBLISH,
+        help="validate and publish (or dry-run) one corrective proposal read from stdin",
+        description=(
+            "Read one frutlups.corrective_publication_proposal.v1 document from stdin,"
+            " allocate the fresh attempt, and run the governed M004 transaction;"
+            " emit frutlups.corrective_publication_receipt.v1."
+        ),
+        epilog=_DRIVE_SEAM_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    publish.add_argument(
+        "project_root", metavar="PROJECT_ROOT", help="repository root of the governed project"
+    )
+    publish.add_argument(
+        "--sidecar",
+        required=True,
+        metavar="SIDECAR",
+        help="existing sidecar to update (equals the proposal sidecar_path)",
+    )
+    publish.add_argument(
+        "--prompt",
+        required=True,
+        metavar="PROMPT",
+        help="attempt-placeholder prompt source path (equals the proposal prompt_path)",
+    )
+    publish.add_argument(
+        "--version",
+        required=True,
+        metavar="N",
+        help="proposal/receipt schema version (supported: 1)",
+    )
+    publish.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate, allocate, render, and build the receipt with zero filesystem write",
+    )
 
 
 def _format_rework_declaration_plan(

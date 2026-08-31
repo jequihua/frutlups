@@ -804,10 +804,10 @@ class PurityAndNoWriteTests(unittest.TestCase):
 
 class PublicBoundaryPinsTests(unittest.TestCase):
     def test_version_and_export_count(self) -> None:
-        self.assertEqual(frutlups.__version__, "0.1.8")
+        self.assertEqual(frutlups.__version__, "0.2.1")
         self.assertEqual(len(frutlups.__all__), 152)
 
-    def test_nine_cli_verbs(self) -> None:
+    def test_twelve_cli_verbs(self) -> None:
         import argparse
 
         parser = cli._build_parser()
@@ -819,7 +819,10 @@ class PublicBoundaryPinsTests(unittest.TestCase):
         self.assertEqual(
             verbs,
             {
+                "corrective-publish",
                 "declare-rework",
+                "drive-frontier",
+                "drive-payload",
                 "status",
                 "next",
                 "orchestrator-plan",

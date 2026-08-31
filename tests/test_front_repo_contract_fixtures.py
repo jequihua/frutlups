@@ -3,10 +3,13 @@
 The shipped product tests read three repository input families (the accepted
 coding/review/self-report prompt scaffolds, the accepted template-v3 layout, and
 the pinned OKF/profile reference checker) that used to live above the test tree
-(``parents[2]``). Those inputs are now copied byte-for-byte, with provenance,
+through a fixed two-parent lookup. Those inputs are now copied byte-for-byte,
+with provenance,
 into ``fixtures/front_repo_contract/`` so the flattened front-facing repository
 runs its complete suite without reading a parent, sibling, development prompt
-directory, root layout, or development checker.
+directory, root layout, or development checker. Earlier versions located those
+inputs through a fixed two-parent test-file assumption; this module now forbids
+that release-portability regression.
 
 This module pins that bundle: the manifest is complete and well formed, every
 declared fixture exists with the exact committed digest, every destination stays
@@ -21,8 +24,12 @@ import json
 import unittest
 from pathlib import Path
 
-_BUNDLE = Path(__file__).resolve().parent / "fixtures" / "front_repo_contract"
+_TEST_ROOT = Path(__file__).resolve().parent
+_BUNDLE = _TEST_ROOT / "fixtures" / "front_repo_contract"
 _MANIFEST = _BUNDLE / "manifest.json"
+_RELEASE_BUNDLE = _TEST_ROOT / "fixtures" / "release_v0_2_0"
+_RELEASE_MANIFEST = _RELEASE_BUNDLE / "manifest.json"
+_RELEASE_MANIFEST_SHA256 = "85f2aba1cd7f4df2256f186d84af2168d78b6af61595a9f8cc27052f32305676"
 
 # The exact accepted-commit provenance the bundle must preserve. Pinned here so a
 # silent drift in either the manifest or a copied fixture fails loudly.
@@ -104,9 +111,56 @@ class FrontRepoContractFixtureBundleTests(unittest.TestCase):
         present = {p.name for p in _BUNDLE.iterdir() if p.is_file()}
         self.assertEqual(present, {"manifest.json"} | set(_EXPECTED))
         self.assertEqual(
-            [p.name for p in _BUNDLE.iterdir() if p.is_dir()], [],
+            [p.name for p in _BUNDLE.iterdir() if p.is_dir() and p.name != "__pycache__"], [],
             "unexpected subdirectory in the fixture bundle",
         )
+
+
+class ReleaseTestAuthorityBundleTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.assertTrue(_RELEASE_MANIFEST.is_file(), "release-authority manifest is missing")
+        self.manifest = json.loads(_RELEASE_MANIFEST.read_text(encoding="utf-8"))
+
+    def test_manifest_pins_both_released_authorities(self) -> None:
+        self.assertEqual(_sha256(_RELEASE_MANIFEST), _RELEASE_MANIFEST_SHA256)
+        self.assertEqual(self.manifest["schema"], "frutlups.release_test_authority.v1")
+        self.assertEqual(self.manifest["frutlups_source"]["tag"], "v0.2.0")
+        self.assertEqual(
+            self.manifest["frutlups_source"]["peeled_commit"],
+            "a5a5750f09830e3c1405c0fb0432efd528c00b97",
+        )
+        self.assertEqual(self.manifest["drive_source"]["tag"], "v0.6.0")
+        self.assertEqual(
+            self.manifest["drive_source"]["peeled_commit"],
+            "adf7092f51b2e5cffceba271f9d723f50b0d4028",
+        )
+
+    def test_manifest_is_a_complete_digest_map_of_portable_authority_bytes(self) -> None:
+        records = self.manifest["members"]
+        paths = [record["path"] for record in records]
+        self.assertEqual(self.manifest["member_count"], 158)
+        self.assertEqual(paths, sorted(set(paths)))
+        present = {
+            path.relative_to(_RELEASE_BUNDLE).as_posix()
+            for path in _RELEASE_BUNDLE.rglob("*")
+            if path.is_file()
+            and path != _RELEASE_MANIFEST
+            and "__pycache__" not in path.relative_to(_RELEASE_BUNDLE).parts
+        }
+        self.assertEqual(present, set(paths))
+        for record in records:
+            target = _RELEASE_BUNDLE / record["path"]
+            self.assertFalse(target.is_symlink(), record["path"])
+            self.assertEqual(target.stat().st_size, record["bytes"], record["path"])
+            self.assertEqual(_sha256(target), record["sha256"], record["path"])
+
+    def test_projected_tests_never_bind_a_fixed_two_parent_repository_root(self) -> None:
+        fixed_depth = ".parents[" + "2]"
+        offenders = []
+        for path in sorted(_TEST_ROOT.glob("test_*.py")):
+            if fixed_depth in path.read_text(encoding="utf-8"):
+                offenders.append(path.name)
+        self.assertEqual(offenders, [])
 
 
 if __name__ == "__main__":
