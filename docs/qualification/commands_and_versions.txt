@@ -1,0 +1,69 @@
+Owner's record of the frutlups-canary runs on 2026-09-05 (Windows 10, PowerShell 5.1)
+Written by the architect from the session log; times are UTC as in ledger.jsonl.
+
+Versions
+  frutlups 0.3.0a0, installed editable from 08_pkg/frutlups into a dedicated venv
+  Pi 0.85.0 (coder seat: openai-codex gpt-5.6-sol, effort medium)
+  Claude Code 2.1.226 (reviewer seat: opus, effort medium)
+  Python 3.14.3, pytest 9.0.2, Git for Windows
+
+Canary project
+  A v4 template export with framework tests removed; three slices under 07_app/
+  (word counter). frutlups.toml: until = slice, max_corrective_rounds = 1,
+  max_jobs = 6, max_wall_minutes = 60, commit_on_accept = true, timeouts
+  coder 900 s (20 s for the forced timeout), reviewer 600 s, verification 300 s.
+  Review routing: ordinary -> reviewer (Claude). holistic_review: false.
+  Forced timeout: coder_seconds = 20 committed before the M001-S02 run.
+  Forced violation: M001-S03 allowed_prefixes narrowed to 07_app/canary/ while
+  its acceptance and objective require 07_app/tests/test_stop_words.py.
+
+Commands, in order (all from the canary root; the frutlups executable is the
+venv's Scripts\frutlups.exe)
+  frutlups preflight                              -> "preflight: ok" (first attempt, 2026-09-05 ~16:40)
+  frutlups status                                 -> three slices unstarted
+  frutlups run --until slice                      -> run 1a, 17:27, stop seat_output (see run_01_ordinary.txt)
+  frutlups run --until slice                      -> run 1b, 17:42, same stop; transcript overwritten later, ledger rows 7-9
+  [frutlups-dev: M001-S04 reopened and accepted, fenced-report fix, D021]
+  [canary: prompts/templates/review_prompt.md wording change committed by hand]
+  frutlups run --until slice                      -> "preflight: unrecorded change: prompts/templates/review_prompt.md"
+                                                     (before that commit; transcript overwritten by the next run)
+  frutlups run --until slice                      -> run 1c, 18:47, M001-S01 accepted, commit f0c6227
+  [canary: frutlups.toml coder_seconds = 20 committed]
+  frutlups run --until slice                      -> run 2a, 18:50, stop seat_transport after one 20 s kill
+  tasklist                                        -> tasklist_after_kills.txt
+  [canary: git checkout -- 07_app/canary/wordcount.py by hand; D004 committed, budget mistakenly left at 20]
+  frutlups run --until slice                      -> run 2b, 18:57, same stop, same leftover file
+  [canary: git checkout -- 07_app/canary/wordcount.py by hand; coder_seconds = 900 committed]
+  frutlups run --until slice                      -> run 2c, M001-S02 accepted, commit c4da6ca
+  frutlups run --until slice                      -> run 3, 19:37, stop path_violation
+  frutlups status --usage                         -> status_usage.txt
+  [canary: file restored and untracked test removed by hand; ledger and prompt 003 committed; pushed]
+
+Hand moves between runs (D006: frutlups never reverts)
+  1. Commit of the review template wording change (foreign path refused by preflight until committed).
+  2. git checkout -- 07_app/canary/wordcount.py after run 2a and again after run 2b.
+  3. Two frutlups.toml commits: coder_seconds 900 -> 20 before run 2a; 20 -> 900 before run 2c.
+  4. After run 3: git checkout of wordcount.py, removal of the untracked test file, hand commit of ledger and prompt.
+  No milestone-close hand commit arose: the canary has holistic_review false (D019).
+
+Observations not visible in the transcripts
+  - Process attribution after run 2a: an attributed listing (Win32_Process with command lines,
+    kept locally because it contains machine paths) showed no process launched from pi.cmd or
+    the nodejs node.exe; every node.exe belonged to the Codex desktop app runtime started
+    before the run. No orphaned grandchild (D018).
+  - The killed coder job's stderr was empty; its stdout.jsonl held 164 events including four
+    reads and one edit (timeout_stderr_tail.txt).
+  - Pi usage in ledger rows is the last assistant message only (D022); true totals for the
+    M001-S02 coder job from its stream: input 19535, cacheRead 16640, output 1148, six messages.
+  - The two failed M001-S01 review jobs (runs 1a, 1b) recorded no reviewed event, so their
+    usage (about 11.3k and 35.4k input tokens) appears in no status --usage row.
+  - Claude auth and capacity failures were not forced and did not occur (D016, D020).
+
+Coder cost source (added 2026-09-06 after the round 1 review)
+  The ledger schema has no cost_usd on coded rows, so status --usage adds each coder job's
+  cost from its local result.json under local_state/frutlups/jobs/ (frutlups contracts 4).
+  Recorded there for the canary: M001-S01 coder job 0.03901 USD (39.71 s), M001-S02 coder job
+  0.010123 USD (47.074 s, last-message cost only, D022), M001-S03 coder job 0.012919 USD
+  (56.208 s, no reviewed row, so it appears in no status row). The two timed-out M001-S02
+  attempts recorded no cost. Hence 0.104768 + 0.03901 = 0.143778 and
+  0.1488335 + 0.010123 = 0.1589565, the sums in status_usage.txt.

@@ -1,0 +1,15 @@
+# Run 1a (2026-09-05 17:27 UTC): first attempt, stopped seat_output after the format retry
+M001-S01 r1 prompt -> prompts/for_coding_agent/001_M001-S01_r1.md
+M001-S01 r1 coder pi/gpt-5.6-sol/medium 39.71s in=6644 out=193 changed=4
+M001-S01 r1 verify ok 0.52s
+M001-S01 r1 review_prompt -> prompts/for_review_agent/001_M001-S01_r1_review.md
+M001-S01 r1 review_prompt -> prompts/for_review_agent/002_M001-S01_format.md
+seat_output: review requires exactly one Findings, Closure Decision, and Verdict heading; inspect review and resume
+
+# Run 1b (17:42 UTC): second attempt before the parser fix, same stop; transcript not retained, see ledger rows 7-9
+
+# Run 1c (18:47 UTC): resume after the D021 parser fix and template wording change
+M001-S01 r1 review_prompt -> prompts/for_review_agent/005_M001-S01_r1_review.md
+M001-S01 r1 review claude/opus/medium pass open=0 11.084s in=11302 out=640
+M001-S01 accepted commit f0c6227
+boundary: one slice accepted

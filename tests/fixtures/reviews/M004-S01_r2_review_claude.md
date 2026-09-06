@@ -1,0 +1,22 @@
+# Review: M004-S01 round 2
+
+## Findings
+| id | severity | disposition | summary |
+| --- | --- | --- | --- |
+| M004-S01-01 | P2 | closed_by_review | The usage section now carries a cost paragraph (`qualification.md:311-320`) that states the copied `coded` rows have no cost, names the owner's supplemental record as the source (`commands_and_versions.txt:62-69`, present at HEAD `980fced`, evidence directory clean against HEAD), and reconciles 0.104768 + 0.03901 = 0.143778 and 0.1488335 + 0.010123 = 0.1589565, totaling 0.3027345; every figure matches `commands_and_versions.txt:65-69` and `status_usage.txt:5-8`, and the D022 last-message caveat on the M001-S02 coder cost matches line 66. The quoted status sums are now derivable from cited evidence. |
+| M004-S01-11 | P2 | closed_by_review | Same gap as M004-S01-01; the coder cost contributions are now explained and cited rather than silent, so the "not observed" clause no longer applies to them. |
+| M004-S01-21 | P2 | closed_by_review | Same gap as M004-S01-01; the 0.03901 and 0.010123 deltas are now stated with their source inside the qualification evidence set (`commands_and_versions.txt:65-68`), so the document no longer needs to mark them not observed. |
+| M004-S01-03 | P3 | closed_by_review | `samples/README.md:17` now names Pi 0.85.0 for `pi_canary_usage.jsonl`, linked to `commands_and_versions.txt:6`; the relative link resolves from `tests/fixtures/samples/` to `08_pkg/frutlups/docs/qualification/`, and the qualification link on line 24 resolves the same way. |
+| M004-S01-22 | P3 | closed_by_review | The wall-time table rows for run 2a and run 3 (`qualification.md:282, 287`) now give the ledger prompt-to-stop intervals of 20 s (`ledger.jsonl:14-15`, 18:50:57 to 18:51:17) and 56 s (`ledger.jsonl:23-24`, 19:37:41 to 19:38:37), and run 3 now cites the 56.208 s job duration from `commands_and_versions.txt:66-67`; both intervals recompute exactly. |
+| M004-S01-23 | P3 | carried | The process-survival section (`qualification.md:215-226`) still quotes only the six `node.exe` rows and does not mention the two `python.exe` and two `claude.exe` rows at `tasklist_after_kills.txt:5, 7, 13, 18`; the acceptance asks only about node and pi, so this remains backlog quality. |
+| M004-S01-12 | P3 | carried | Round 2 again omitted the focused pytest command; the receipt's full hermetic run (287 passed, exit 0, 70.971 s) covers the same tree for a Markdown-only change, so no verification gap results. |
+| M004-S01-13 | P3 | carried | The usage section (`qualification.md:333-337`) says M001-S03's status quantities are all `?` and that no total covering every attempted job is observed, but the cited source now also records the M001-S03 coder job cost 0.012919 USD and that the two timed-out attempts recorded no cost (`commands_and_versions.txt:66-68`); quoting those two facts would make the per-attempt cost picture complete except for the runs 1a and 1b review jobs. Nothing stated is wrong. |
+
+Verified against the evidence with no finding: the two manifest files hash to the receipt values (`89742f03…414c8f` document, `37ad03bc…60f7d` README) and the receipt's `base_commit` is HEAD; the round 2 document differs from round 1 only in the two wall-time rows and the new cost paragraph, and the README only in the Pi version link; the 19-line command block, six ledger rows, `seat_transport` and `path_violation` stop lines, six `node.exe` rows, and four status rows remain byte-exact quotations; the UTF-16LE-to-UTF-8 recoveries of `run_02_timeout.txt:4` and `run_03_violation.txt:4` round-trip exactly; seconds sums 50.794, 68.352, 119.146 and token sums 17946/833 and 24867/1585 match `status_usage.txt:5-8`; the D022 totals 19535 + 16640 = 36175 and 1148 match `commands_and_versions.txt:57`; every remaining "not observed" statement is accurate against the eight evidence files; the README no longer says "cumulative" and states per-message summing per D022.
+
+## Closure Decision
+Objective status: achieved
+Objective evidence: The receipt records the full hermetic command at exit 0 with 287 passed over the two manifest files at their stated hashes on base commit 980fced, and every acceptance clause is met by cited evidence, including the previously silent coder cost share, which the document now derives from `commands_and_versions.txt:62-69`.
+
+## Verdict
+Verdict: pass - next: architect records this review, accepts M004-S01, and carries M004-S01-23, M004-S01-12, and M004-S01-13 to the backlog.

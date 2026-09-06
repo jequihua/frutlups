@@ -1,0 +1,14 @@
+# Run 2a (18:50 UTC): coder_seconds = 20, forced timeout
+M001-S02 r1 prompt -> prompts/for_coding_agent/002_M001-S02_r1.md
+seat_transport: coder: Pi timeout failure; files left by failed attempt: 07_app/canary/wordcount.py; owner must inspect and record or restore the edits
+䴠〠張潧敶湲湡散氯摥敧⹲獪湯൬ ⁍㜰慟灰振湡牡⽹潷摲潣湵⹴祰਍㼿瀠潲灭獴是牯损摯湩彧条湥⽴〰弲き㄰匭㈰牟⸱摭਍
+# Run 2b (18:57 UTC): rerun with the budget still at 20 by mistake, second forced timeout
+seat_transport: coder: Pi timeout failure; files left by failed attempt: 07_app/canary/wordcount.py; owner must inspect and record or restore the edits
+
+# Run 2c: file restored by hand, coder_seconds = 900 committed, slice completed
+M001-S02 r1 coder pi/gpt-5.6-sol/medium 47.074s in=243 out=186 changed=3
+M001-S02 r1 verify ok 0.707s
+M001-S02 r1 review_prompt -> prompts/for_review_agent/006_M001-S02_r1_review.md
+M001-S02 r1 review claude/opus/medium pass open=0 21.278s in=24624 out=1399
+M001-S02 accepted commit c4da6ca
+boundary: one slice accepted

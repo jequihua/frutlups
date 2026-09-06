@@ -1,195 +1,48 @@
 # frutlups
 
-`frutlups` is a deterministic, artifact-first project-state and artifact-writing
-tool for governed coding loops. It reads a repository's roadmap and governance
-artifacts, tells you (or an automated runner) exactly what the next loop step is,
-and — on request — performs bounded, single-artifact writes such as a coding
-prompt, a review prompt, or a verdict record.
+frutlups is an unattended runner for template v4 projects and is never used for manual operation.
 
-It is **not** an autonomous agent: `frutlups` never launches, schedules, or pays
-for model calls, and it makes no network, provider, or credential access. A
-separate runner may consume the versioned status surface below and drive real
-agents; `frutlups` supplies the deterministic state and the governed artifact
-writes, nothing more.
+With Python 3.11+ installed, run `python -m pip install .` from the cloned package directory
+containing `pyproject.toml`; PyYAML is the only runtime package dependency (D010).
 
-## What it does
+Run these commands from the project root, or pass the root as the optional first argument:
 
-- **Reads** the active roadmap, prompts, self-reports, review reports, and
-  verdict records to infer, from artifacts alone, where a governed loop stands.
-- **Computes** the next actionable slice and a versioned planning frontier that a
-  runner can act on, fully resumable without chat history or a database.
-- **Writes**, only when asked, exactly one governed artifact per invocation
-  (coding prompt, review prompt, or verdict record), each with a `--dry-run`
-  preview.
-- **Stops** cleanly on blocked, invalid, unsafe, or ambiguous states rather than
-  guessing.
-
-Legacy, v2, and template-v3 repository layouts are all supported; marker-free
-legacy Markdown remains first-class.
-
-A committed layout config may additionally opt into two closed layout modes
-(each defaults to the historical behavior when absent):
-
-- `reports.discovery: recursive_contained` — the acceptance-evidence scan
-  accepts milestone subdirectories beneath the configured reviews root. The
-  inventory is deterministic, stays inside the resolved root, treats ordinary
-  files only (link-like entries are never evidence), and fails closed on
-  escaped, duplicate, or contradictory authority. `flat` keeps the exact
-  historical single-directory behavior.
-- `prompts.numbering: global_flat_sequence` with
-  `prompts.pairing: workflow_metadata` — coding and review prompts share one
-  global number sequence and pair through their validated workflow metadata
-  (canonical milestone/slice identity and explicit prompt references), never
-  through filename parity, slugs, or proximity; ambiguity fails closed.
-  `same_sequence` keeps the historical per-kind equal-sequence pairing.
-
-## Runner integration surface
-
-An automated runner consumes three read-only governed surfaces and may ask
-`frutlups` to perform its bounded safe writes:
-
-- `planning_frontier` — a versioned (`frutlups.planning_frontier`) outcome that
-  maps the repository's durable state to exactly one behavior; and
-- `loop_resume` — the concrete next loop step plus the artifact paths involved;
-  and
-- `memory_mode` — the versioned (`frutlups.memory_mode`) declared memory mode,
-  independent of backend availability, with the safe repository-relative memory
-  root when the declared mode is `llloom`.
-
-All are available together from `status --json`. A runner never generates
-governance artifacts itself: it observes the status, and when a write is due it
-invokes the matching `frutlups` verb, then re-reads the status.
-
-## Installation
-
-`frutlups` targets Python 3.11+ and declares a single runtime dependency, PyYAML.
-From the package root:
-
-```powershell
-python -m pip install .
-# or, with the optional dev tools (mypy, ruff):
-python -m pip install ".[dev]"
+```text
+frutlups preflight [root]
+frutlups run [root] [--until slice|milestone|roadmap] [--once] [--json]
+frutlups status [root] [--usage] [--json]
 ```
 
-PyYAML (`>=6.0.3,<7`) is a **mandatory** runtime dependency and the sole accepted
-YAML semantic engine; there is no custom parser or fallback. Installing without it
-fails clearly rather than degrading behavior.
+Preflight checks configuration, project evidence, required executables, and subscription access.
+It exits 0 when ready or 2 with one line per refusal. Authentication probe streams remain under
+`local_state/frutlups/jobs/`; refusal messages include their location and a scrubbed stderr tail.
+On Windows, `env_passthrough` must include `SYSTEMROOT`, `COMSPEC`, and `PATHEXT`.
 
-## CLI
+Run resumes from the ledger. `--until` overrides the configured boundary; `--once` performs one
+loop iteration. Exit codes are 0 for completion, a boundary, or a successful single iteration;
+2 for preflight refusal; 3 for a stop requiring human action; and 1 for an internal error.
+Text output uses one line per action. `--json` emits one object per line, including refusals
+and stop reasons.
 
-`frutlups` exposes nine commands. Run any command with `--help` for its options;
-all accept `--json`.
+Status text matches the template's `scripts/ledger.py status`. `--usage` adds per-slice and
+per-milestone sums of recorded seat seconds, input/output tokens, and reported cost estimates.
+Coder cost estimates come from local job results associated with recorded coding prompts;
+reviewer estimates come from the ledger. Unreported quantities appear as `?` (JSON `null`).
+These are sums of available evidence, not billing totals or currency limits.
 
-```powershell
-# discover the commands and the loop they support
-python -m frutlups --help
+## Release 0.3.0
 
-# read-only: where the loop stands and what to do next
-python -m frutlups status <project>
-python -m frutlups next <project>
+Version 0.3.0 is incompatible with 0.2.x projects (D002).
 
-# read-only runner-facing planning surfaces
-python -m frutlups orchestrator-plan <project> --json
-python -m frutlups orchestrator-handoff <project> --json
+The [real-seat qualification](docs/qualification.md) ran on Windows only (N3), covering an
+ordinary slice through acceptance, forced coder timeouts, and a forced path violation (D020).
 
-# governed single-artifact writes (preview with --dry-run first)
-python -m frutlups declare-rework <project> --pass-id holistic_pass_001 --slice M003-S03 --dry-run
-python -m frutlups make-coding-prompt <project> --dry-run
-python -m frutlups make-coding-prompt <project>
-python -m frutlups make-review-prompt <project>
-python -m frutlups record-verdict <project> --review-report <path-to-review-report>
+Pi usage summation (D022) and multi-seat report merging (D024)
+were fixed after the canary and are covered by tests only; these fixes were not requalified
+on real seats (M004-H3).
 
-# advance one governed step (bounded, single artifact; --dry-run to preview)
-python -m frutlups orchestrator-run <project> --once --dry-run
-```
+The milestone-close commit (D019) remains unimplemented and unexercised, so the owner commits
+the holistic prompt, report, and ledger by hand after each milestone close (M003-S01-H6, M004-H3).
 
-Commands:
-
-- `declare-rework` — append a bounded declaration reopening accepted slices
-  after a complete planning frontier.
-- `status` — read-only project and loop status.
-- `next` — the artifact-inferred next slice (read-only).
-- `orchestrator-plan` — the read-only versioned planning frontier and resume plan.
-- `orchestrator-run` — perform the next governed step (one bounded artifact write).
-- `orchestrator-handoff` — a read-only coder/reviewer handoff snapshot.
-- `make-coding-prompt` — write a coding prompt for the current frontier.
-- `make-review-prompt` — write a review prompt for the latest unmatched coding prompt.
-- `record-verdict` — parse a review report verdict and write a governance record.
-
-`status`, `next`, `orchestrator-plan`, and `orchestrator-handoff` never write. The
-writing verbs produce a single repository artifact and accept `--dry-run` to
-preview without writing. `declare-rework` stores immutable version-1 JSON under
-`05_governance/rework_declarations/`; reopened slices retain their historical
-acceptance and require a fresh prompt-linked self-report, independent review,
-passing report, and verdict record before terminal completion is restored.
-
-Here `<project>` is the repository whose loop you are governing. When you run the
-commands from inside a package workspace that is itself a subdirectory of the
-governed repository, `<project>` is the parent directory (for example `..`).
-
-## Optional OKF/profile observation
-
-The package ships one optional, read-only observation surface,
-`frutlups.observe_okf_profile_path(path)`, which reports an artifact's OKF-concept
-and framework-profile status for the pinned candidate profile
-(`framework_profile: "0.1-rc.1"`; see `okf_profile_v0_1.md`). It observes exactly
-one supplied path, changes no file, and — importantly — carries **no** routing,
-acceptance, gate, runner, or write authority: an OKF or profile result never
-decides prompt validity, acceptance, the frontier, a gate, or execution
-eligibility. It is a supplementary reader, off by default, that nothing in the
-loop calls automatically.
-
-## Documentation
-
-- [`QUICKSTART.md`](QUICKSTART.md) — the shortest path from a fresh checkout to a
-  working artifact-first loop.
-- [`ARTIFACT_TEMPLATE_GUIDE.md`](ARTIFACT_TEMPLATE_GUIDE.md) — how the artifact
-  templates the loop reads and writes fit together.
-- [`MIGRATION_GUIDE.md`](MIGRATION_GUIDE.md) — adopting the loop in an existing
-  project.
-- [`LLLOOM_INTEGRATION_GUIDE.md`](LLLOOM_INTEGRATION_GUIDE.md) — the optional,
-  disabled-by-default `llloom` memory backend.
-- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — the local-first checklist before
-  a package release.
-- [`public_api_contract.md`](public_api_contract.md) — the stable public surface.
-- [`okf_profile_v0_1.md`](okf_profile_v0_1.md) — the OKF/framework-profile
-  candidate the optional observation implements against.
-
-## Public surface and compatibility
-
-The stable public surface — the distribution/import name, version, the nine CLI
-verbs, the package `__all__` export set, documented dataclass and JSON shapes, and
-`py.typed` — is described in [`public_api_contract.md`](public_api_contract.md).
-Changes to it require reviewed compatibility evidence.
-
-## Testing
-
-With the package installed (or `src` on `PYTHONPATH`), run the product test suite
-from the package root:
-
-```powershell
-python -m pip install ".[dev]"
-python -m unittest discover -s tests
-```
-
-The suite runs offline and deterministically. See `tests/README.md` for what it
-covers.
-
-## Consumer integration status
-
-Connecting `frutlups` to an autonomous runner (`frutlups-drive`) is the **next**
-consumer integration, not a capability this repository ships. `frutlups` provides
-the accepted control/state surface described above; the runner-side adapters,
-live transport, and agent wiring live in that separate project and are not part of
-this package.
-
-## License and publication
-
-Frutlups is open-source software licensed under the permissive MIT License. It
-may be used, copied, modified, distributed, sublicensed, and sold, including for
-commercial purposes, subject to preserving the copyright and license notice.
-See `LICENSE` for the complete terms.
-
-Tagging, pushing, publishing to a package registry, and creating hosted release
-assets remain explicit human-owner actions; repository tooling does not perform
-them automatically.
+Claude authentication and capacity classification remains text-defined and was not exercised
+by the canary (D016).

@@ -1,0 +1,19 @@
+# tasklist taken immediately after the run 2a stop
+Image Name                     PID Session Name        Session#    Mem Usage
+========================= ======== ================ =========== ============
+cmd.exe                      26736 Console                    1      4,124 K
+python.exe                   30412 Console                    1      6,928 K
+powershell.exe               31320 Console                    1     52,804 K
+python.exe                   32176 Console                    1     11,828 K
+powershell.exe               21688 Console                    1     74,688 K
+node.exe                     35788 Console                    1     34,472 K
+node.exe                      5440 Console                    1     34,408 K
+cmd.exe                      23048 Console                    1      4,620 K
+node.exe                     13184 Console                    1     34,404 K
+claude.exe                   23288 Console                    1    303,848 K
+node.exe                     19816 Console                    1     48,048 K
+node.exe                      4436 Console                    1     47,740 K
+cmd.exe                       6644 Console                    1      5,580 K
+node.exe                     28564 Console                    1     55,640 K
+claude.exe                   34624 Console                    1    279,408 K
+# 359 other processes omitted (unrelated to the seats); none named pi, and every node.exe here belongs to the Codex desktop app runtime started before the run, per the attributed listing kept locally

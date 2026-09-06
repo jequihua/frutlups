@@ -1,68 +1,25 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "frutlups"
-version = "0.2.1"
-description = "Lightweight artifact-first coding loop orchestrator"
-readme = "README.md"
+version = "0.3.0"
 requires-python = ">=3.11"
-authors = [
-  { name = "frutlups maintainers" },
-]
-license = "MIT"
-license-files = ["LICENSE"]
-# PyYAML is the product's sole mandatory runtime dependency and the single
-# accepted YAML semantic engine. The bounded `SafeLoader` boundary in
-# `frutlups._yaml` is the one runtime parse path for layout and metadata; there
-# is no custom parser or fallback. A missing PyYAML is an invalid installation,
-# not a degraded mode.
-dependencies = [
-  "PyYAML>=6.0.3,<7",
-]
+dependencies = ["PyYAML>=6.0.3,<7"]
 
 [project.scripts]
 frutlups = "frutlups.cli:main"
 
-[project.optional-dependencies]
-dev = [
-  "mypy>=1.8",
-  "ruff>=0.6",
-]
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-frutlups = ["py.typed"]
-
-[tool.mypy]
-files = ["src/frutlups"]
-mypy_path = "src"
-python_version = "3.11"
-warn_unused_ignores = true
-warn_redundant_casts = true
-no_implicit_optional = true
-check_untyped_defs = true
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "unverified_until_m004: text-defined seat failure case awaiting real qualification",
+]
 
 [tool.ruff]
-src = ["src"]
-# Enforced lint/format baseline is scoped to the package source. Test linting is
-# intentionally deferred to a later slice (see the M014-S02 self-report), mirroring
-# the M014-S01 mypy baseline which also scoped to src/frutlups.
-include = ["src/frutlups/**/*.py"]
-target-version = "py311"
 line-length = 100
-
-[tool.ruff.lint]
-# Conservative, deterministic rule set: pyflakes (F), pycodestyle errors and
-# warnings (E, W), isort import ordering (I), pyupgrade (UP), flake8-bugbear (B),
-# and flake8-comprehensions (C4). Kept narrow so the baseline is meaningful
-# without churning the established code.
-select = ["E", "W", "F", "I", "UP", "B", "C4"]
-
-[tool.ruff.format]
-# Match the existing code style: double quotes, space indentation.
-quote-style = "double"
-indent-style = "space"
