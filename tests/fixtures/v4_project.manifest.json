@@ -41,8 +41,8 @@
     "prompts/for_coding_agent/README.md": "cba2357afdf557a6735ce9b2d76034229bdf004a128d27504924aea5a57b40d3",
     "prompts/for_review_agent/README.md": "3f5617bb23233dbb36a8b58d6b76042cf689c0d94da88dfb65830c2a0fdafbf5",
     "prompts/templates/coding_prompt.md": "de6eed42ea39811b5c270874ed578a476240552a502e5b95eb42b7cbbd8f0fa9",
-    "prompts/templates/review_prompt.md": "a5ff922e715b2125819fac0b00591a0e651b7e64325cff49401e3d2d6bd4cd82",
-    "pyproject.toml": "76698393e139eeb4beea1f670e261ecb9d740109bb594a57c706c1d6a0da1a5c",
+    "prompts/templates/review_prompt.md": "7b69e20697ffc2ee44ae4968be0971c58e03587bc9fa15abbb4d8ba4ff762034",
+    "pyproject.toml": "f1bec126678eab9c1ca5d4c6a0eac87026cd0edacc036c3f97ada6ce60127b9c",
     "questions/README.md": "d8c137abd16e76d52b72415a50174a4bfcb72d7214528596513ad13fc96c25f7",
     "questions/answered/README.md": "758a150c9439a094404a98a40fb1f6d64a202c9022660de8453be9ffcd080642",
     "questions/open/README.md": "8f24cb92abeb7042d91a5b3311a40b0ecd689e4a374d84613ec8d41e6ff7c03a",
@@ -53,7 +53,7 @@
     "scripts/front_repo.py": "fdaecc21d7083a63bfe69738543d50f2472c6697566826d6e1027f20546808fd",
     "scripts/hermetic_verification.py": "3ac38fdb4193d57c501cb6bec2c23c8d56c06f35abf2e20ecc0a84c2feda69b7",
     "scripts/ledger.py": "2e05a555ff76307c6bab669b932f573bab7604cdb41500a6fdff116500d0a6e3",
-    "scripts/prompt.py": "fb79c272f0f92d343bc926aab69e0b0bac0ccbc08acb26ad98e64cc4c7d5035f",
+    "scripts/prompt.py": "3ad1f62c2b53d0f853548a1d4ed1a9cfba36eccb890f2ce6786462ee004479d8",
     "scripts/roadmap.py": "67552ef91bde8168631a76c677abcc1bcc412724347d60785c761b4dd52543ba",
     "scripts/verify.py": "7e5e7058ff7b57370c077b28e6dbd3751201ca057e3b77830d52e9087efbc22b"
   }
