@@ -1,6 +1,6 @@
-"""Read-only project admission, with local authentication probe evidence."""
+"""Read-only project admission, with local model probe evidence."""
 
-import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -8,77 +8,40 @@ from pathlib import Path
 from uuid import uuid4
 
 from . import _loop_evidence as evidence
-from . import gitws, ledger, procs, receipt
+from . import gitws, ledger, receipt
 from . import roadmap as roadmap_module
 from .config import Config
-from .seats import child_environment
+from .seats import Job, Role, child_environment
+from .seats import claude, pi
 
 
-def _probe(root, cfg, name, env):
+def _probe(root, cfg, name, memory_enabled=False):
     seat = cfg.seats[name]
-    executable = getattr(cfg, seat.adapter)
-    argv = (
-        (executable, "auth", "check", "--provider", seat.provider)
-        if seat.adapter == "pi"
-        else (executable, "auth", "status")
-    )
-    directory = root / "local_state" / "frutlups" / "jobs" / f"auth-{uuid4().hex}"
+    adapter = pi.PiSeat() if seat.adapter == "pi" else claude.ClaudeSeat()
+    tools = pi.READ_TOOLS if seat.adapter == "pi" else claude.READ_TOOLS
+    job_id = f"probe-{uuid4().hex}"
+    directory = root / "local_state" / "frutlups" / "jobs" / job_id
     directory.mkdir(parents=True)
-    stdout, stderr = directory / "stdout.txt", directory / "stderr.txt"
-    stdout.touch()
-    stderr.touch()
-    result = procs.run_process(argv, root, env, 30, stdout, stderr)
-    if result.exit == 0 and not result.timed_out and not result.exception:
-        return None
-    output = stdout.read_text(encoding="utf-8", errors="replace")
-    error_text = stderr.read_text(encoding="utf-8", errors="replace")
-    unavailable = any(
-        term in (output + error_text).lower()
-        for term in ("unknown command", "unrecognized command", "unknown subcommand")
+    prompt = b"Reply with OK only.\n"
+    prompt_path = directory / "prompt.md"
+    prompt_path.write_bytes(prompt)
+    job = Job(
+        id=job_id, role=Role.reviewer, seat_name=name, adapter=seat.adapter,
+        provider=seat.provider, model=seat.model, effort=seat.effort,
+        prompt_path=prompt_path, prompt_sha=hashlib.sha256(prompt).hexdigest(),
+        cwd=root, tools=tools, timeout=60, expected_notes_path=None,
+        memory_enabled=memory_enabled,
     )
-    if seat.adapter == "claude" and unavailable and not result.timed_out and not result.exception:
-        stdout, stderr = directory / "probe.json", directory / "probe-stderr.txt"
-        stdout.touch()
-        stderr.touch()
-        argv = (
-            executable,
-            "-p",
-            "--model",
-            seat.model,
-            "--effort",
-            seat.effort,
-            "--output-format",
-            "json",
-            "--permission-mode",
-            "dontAsk",
-            "--tools",
-            "",
-            "--strict-mcp-config",
-            "--mcp-config",
-            '{"mcpServers":{}}',
-            "--no-session-persistence",
-        )
-        result = procs.run_process(
-            argv, root, env, 30, stdout, stderr, stdin_bytes=b"Reply with OK only."
-        )
-        try:
-            body = json.loads(stdout.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            body = None
-        if (
-            result.exit == 0
-            and not result.timed_out
-            and not result.exception
-            and isinstance(body, dict)
-            and body.get("is_error") is False
-            and body.get("result")
-        ):
-            return None
-    tail = stderr.read_bytes() if stderr.is_file() else b""
+    result = adapter.run(job, cfg)
+    if result.status == "completed":
+        shutil.rmtree(directory)
+        return None
+    tail = result.stderr_path.read_bytes() if result.stderr_path.is_file() else b""
     detail = receipt._scrub(tail, root, dict(os.environ))
-    cause = "timed out" if result.timed_out else result.exception or f"exit {result.exit}"
     return (
-        f"authentication check failed: {name}: {cause}; stderr: {detail or '(empty)'}; "
+        f"model probe failed: {name}: adapter={seat.adapter} provider={seat.provider} "
+        f"model={seat.model}; failure={result.failure_class}; "
+        f"diagnostic: {result.diagnostic or '(empty)'}; stderr: {detail or '(empty)'}; "
         f"streams: {directory.relative_to(root).as_posix()}"
     )
 
@@ -146,7 +109,7 @@ def prepare(root, cfg=None, roadmap=None):
                 errors.append(f"missing seat: {name}")
                 continue
             seat = cfg.seats[name]
-            key = (seat.adapter, seat.provider)
+            key = (seat.adapter, seat.provider, seat.model)
             if key in checked:
                 continue
             checked.add(key)
@@ -154,10 +117,10 @@ def prepare(root, cfg=None, roadmap=None):
                 errors.append(f"seat executable missing: {seat.adapter}")
                 continue
             try:
-                if error := _probe(root, cfg, name, env):
+                if error := _probe(root, cfg, name, roadmap.memory is not None):
                     errors.append(error)
             except (OSError, subprocess.SubprocessError) as exc:
-                errors.append(f"authentication check failed: {name}: {exc}")
+                errors.append(f"model probe failed: {name}: {exc}")
     return (
         cfg,
         roadmap,

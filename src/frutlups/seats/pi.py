@@ -88,14 +88,19 @@ def _assistant_text(message: dict) -> str:
 
 def _parse(path: Path, process: ProcessResult) -> tuple[list[dict], bool, FailureClass | None]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-        events = [json.loads(line) for line in lines]
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        lines = path.read_bytes().splitlines()
+    except OSError:
         return [], False, FailureClass.output
-    if not events:
-        return [], False, FailureClass.transport
-    if any(not isinstance(event, dict) for event in events):
-        return [], False, FailureClass.output
+    events, malformed = [], False
+    for line in lines:
+        try:
+            event = json.loads(line.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            event = None
+        if isinstance(event, dict):
+            events.append(event)
+        else:
+            malformed = True
     ended = any(event.get("type") == "agent_end" for event in events)
     messages = [
         event.get("message")
@@ -105,6 +110,10 @@ def _parse(path: Path, process: ProcessResult) -> tuple[list[dict], bool, Failur
         and event["message"].get("role") == "assistant"
     ]
     message = messages[-1] if messages else None
+    if malformed:
+        return messages, ended, FailureClass.output
+    if not events:
+        return [], False, FailureClass.transport
     if not ended:
         return messages, False, FailureClass.output
     if message is not None and (failure := _failure(message)) is not None:
@@ -139,14 +148,11 @@ class PiSeat:
             _argv(job, config), job.cwd, child_environment(job, config), job.timeout,
             stdout, stderr,
         )
+        messages, _, failure = _parse(stdout, process)
         if process.timed_out:
             failure = FailureClass.timeout
-            messages = []
         elif process.exception:
             failure = FailureClass.transport
-            messages = []
-        else:
-            messages, _, failure = _parse(stdout, process)
         message = messages[-1] if messages else None
         tokens_in, tokens_out, cost_usd = _usage(messages)
         completed = failure is None

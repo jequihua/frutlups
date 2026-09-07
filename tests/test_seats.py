@@ -8,13 +8,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from test_loop import project as project
+
+from frutlups import loop
 from frutlups.procs import ProcessResult
 from frutlups.seats import FailureClass, Job, Role, claude, pi
 
 SAMPLES = Path(__file__).parent / "fixtures" / "samples"
 
 
-def _job(tmp_path: Path, adapter: str, role: Role = Role.coder) -> Job:
+def _job(tmp_path: Path, adapter: str, role: Role = Role.coder, *, memory=False) -> Job:
     prompt = tmp_path / f"{adapter}-prompt.md"
     prompt.write_text("Execute this prompt.", encoding="utf-8")
     tools = pi.tools_for(role) if adapter == "pi" else claude.tools_for(role)
@@ -32,6 +35,7 @@ def _job(tmp_path: Path, adapter: str, role: Role = Role.coder) -> Job:
         tools,
         12,
         "notes.md" if role is Role.coder else None,
+        memory,
     )
 
 
@@ -64,6 +68,42 @@ def test_job_contract_is_frozen(tmp_path: Path) -> None:
 
     with pytest.raises(FrozenInstanceError):
         job.model = "changed"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    ("module", "seat", "sample"),
+    [(pi, pi.PiSeat, "pi_ok.jsonl"), (claude, claude.ClaudeSeat, "claude_opus_ok.json")],
+)
+@pytest.mark.parametrize(
+    ("memory", "configured", "extra_dirs"),
+    [
+        pytest.param(False, False, (), id="neither"),
+        pytest.param(False, True, (), id="executable-only"),
+        pytest.param(True, False, (), id="memory-only"),
+        pytest.param(True, True, ("memory-bin",), id="memory-and-executable"),
+    ],
+)
+def test_child_environment_adds_llloom_only_for_memory_jobs_with_local_executable(
+    monkeypatch, tmp_path, module, seat, sample, memory, configured, extra_dirs,
+):
+    monkeypatch.setenv("SAFE_VALUE", "fixture-value")
+    monkeypatch.setenv("PATH", str(tmp_path / "ambient-bin"))
+    cfg = _config(tmp_path, ("SAFE_VALUE",))
+    cfg.llloom = str(tmp_path / "memory-bin" / "llloom.exe") if configured else None
+    capture = {}
+    monkeypatch.setattr(module, "run_process", _fake_process(SAMPLES / sample, capture=capture))
+    adapter = module.__name__.rsplit(".", 1)[-1]
+    job = _job(tmp_path, adapter, memory=memory)
+
+    result = seat().run(job, cfg)
+
+    assert result.status == "completed"
+    assert capture["env"] == {
+        "SAFE_VALUE": "fixture-value",
+        "PATH": os.pathsep.join((*cfg.path_dirs, *(str(tmp_path / d) for d in extra_dirs))),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "FRUTLUPS_SEAT": "coder",
+    }
 
 
 def test_pi_argv_environment_and_completed_sample(monkeypatch, tmp_path: Path) -> None:
@@ -119,6 +159,67 @@ def test_pi_sums_per_message_usage_from_m004_canary(monkeypatch, tmp_path: Path)
         0.020935000000000002, 0.024038999999999998, 0.04471000000000001,
         0.035195000000000004, 0.005433, 0.010123,
     ])
+
+
+@pytest.fixture
+def pi_partial_stream():
+    # Session/start followed by the first four recorded assistant message_end events.
+    lines = (SAMPLES / "pi_canary_usage.jsonl").read_bytes().splitlines()
+    return b"\n".join(lines[:6]) + b"\n"
+
+
+@pytest.mark.parametrize("failure", [FailureClass.timeout, FailureClass.transport])
+@pytest.mark.parametrize("tail", [b"", b'{"type": "\xe2'])
+def test_pi_preserves_drained_usage_after_process_failure(
+    monkeypatch, tmp_path, pi_partial_stream, failure, tail,
+):
+    exception = "OSError: synthetic pipe failure" if failure is FailureClass.transport else None
+
+    def failed(argv, cwd, env, timeout, stdout, stderr):
+        stdout.write_bytes(pi_partial_stream + tail)
+        return ProcessResult(1, failure is FailureClass.timeout, 1.25, stdout, stderr, exception)
+
+    monkeypatch.setattr(pi, "run_process", failed)
+    result = pi.PiSeat().run(_job(tmp_path, "pi"), _config(tmp_path))
+
+    assert result.status == ("timed_out" if failure is FailureClass.timeout else "failed")
+    assert result.failure_class is failure
+    assert result.exit == 1
+    assert result.secs == 1.25
+    assert result.tokens_in == 22445
+    assert result.tokens_out == 921
+    assert result.cost_usd == pytest.approx(0.124879)
+    assert result.diagnostic == (exception or "Pi timeout failure")
+    assert result.stdout_path.read_bytes() == pi_partial_stream + tail
+
+
+@pytest.mark.parametrize("failure", [FailureClass.timeout, FailureClass.transport])
+def test_failed_pi_attempts_save_drained_usage_in_result_json(
+    project, monkeypatch, pi_partial_stream, failure,
+):
+    root, cfg, model = project
+    original_process = pi.run_process
+
+    def failed(argv, cwd, env, timeout, stdout, stderr):
+        if env["FRUTLUPS_SEAT"] != "coder":
+            return original_process(argv, cwd, env, timeout, stdout, stderr)
+        stdout.write_bytes(pi_partial_stream)
+        return ProcessResult(
+            1, failure is FailureClass.timeout, 1.25, stdout, stderr,
+            "OSError: synthetic pipe failure" if failure is FailureClass.transport else None,
+        )
+
+    monkeypatch.setattr(pi, "run_process", failed)
+    assert loop.run(root, cfg, model) == loop.StopReason.seat_transport
+    directories = list((root / "local_state/frutlups/jobs").iterdir())
+    assert len(directories) == 2  # The original attempt and its same-round retry.
+    for directory in directories:
+        result = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+        assert result["status"] == ("timed_out" if failure is FailureClass.timeout else "failed")
+        assert result["failure_class"] == failure.value
+        assert result["tokens_in"] == 22445
+        assert result["tokens_out"] == 921
+        assert result["cost_usd"] == pytest.approx(0.124879)
 
 
 @pytest.mark.parametrize("cache_key", ["cacheRead", "cacheWrite"])
@@ -266,6 +367,9 @@ def test_timed_out_process_is_timeout(monkeypatch, tmp_path: Path, module, seat)
 
     assert result.status == "timed_out"
     assert result.failure_class is FailureClass.timeout
+    assert result.tokens_in is None
+    assert result.tokens_out is None
+    assert result.cost_usd is None
 
 
 @pytest.mark.parametrize(("module", "seat"), [(pi, pi.PiSeat), (claude, claude.ClaudeSeat)])
@@ -292,25 +396,25 @@ def test_prelaunch_failures_return_output_result(monkeypatch, tmp_path, module, 
     assert "Error:" in result.diagnostic
 
 
-@pytest.mark.unverified_until_m004
+@pytest.mark.text_defined
 @pytest.mark.parametrize("text", ["authentication failed", "unauthorized", "HTTP 401"])
-def test_claude_auth_text_rules_are_unverified_until_m004(tmp_path: Path, text: str) -> None:
+def test_claude_auth_text_rules_are_unverified(tmp_path: Path, text: str) -> None:
     process = _process(tmp_path / "stdout", tmp_path / "stderr", exit=1)
 
     assert claude._classify({"is_error": True, "result": text}, process) is FailureClass.auth
 
 
-@pytest.mark.unverified_until_m004
+@pytest.mark.text_defined
 @pytest.mark.parametrize("text", ["429", "rate_limit", "quota", "overloaded"])
-def test_pi_capacity_text_rules_are_unverified_until_m004(text: str) -> None:
+def test_pi_capacity_text_rules_are_unverified(text: str) -> None:
     message = {"stopReason": "error", "errorMessage": text}
 
     assert pi._failure(message) is FailureClass.capacity
 
 
-@pytest.mark.unverified_until_m004
+@pytest.mark.text_defined
 @pytest.mark.parametrize("text", ["rate limit", "429", "billing", "overloaded", "quota"])
-def test_claude_capacity_text_rules_are_unverified_until_m004(
+def test_claude_capacity_text_rules_are_unverified(
     tmp_path: Path, text: str,
 ) -> None:
     process = _process(tmp_path / "stdout", tmp_path / "stderr", exit=1)

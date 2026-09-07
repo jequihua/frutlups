@@ -110,4 +110,7 @@ def job_output_paths(job: Job, stdout_name: str) -> tuple[Path, Path]:
     directory = job.cwd / "local_state" / "frutlups" / "jobs" / job.id
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "prompt.md").write_bytes(Path(job.prompt_path).read_bytes())
-    return directory / stdout_name, directory / "stderr.txt"
+    stdout, stderr = directory / stdout_name, directory / "stderr.txt"
+    stdout.touch()
+    stderr.touch()
+    return stdout, stderr

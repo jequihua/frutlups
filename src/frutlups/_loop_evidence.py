@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from collections import Counter
 
 from . import gitws, ledger, render, verdict
 from ._paths import repo_path
@@ -125,20 +126,38 @@ def _diff(root, cfg, base, changed):
     return "".join(blocks)
 
 
-def combined_review(reviews):
-    """Merge shared ids by disposition, then severity; keep the winning row verbatim."""
+def prior_finding_ids(root, state):
+    ids = set(re.findall(rf"\b{re.escape(state.id)}-[^\s,]+", state.reopen_reason or ""))
+    if state.last_report:
+        text = repo_path(root, state.last_report).read_text(encoding="utf-8")
+        ids.update(f.id for f in verdict.parse(text).findings)
+    return ids
+
+
+def combined_review(reviews, *, seat_names=(), prior_ids=()):
+    """Suffix shared new ids for named seats; merge prior or unnamed ids by strictness."""
+    if seat_names and len(seat_names) != len(reviews):
+        raise ValueError("each routed review must have a seat name")
     if len(reviews) == 1:
         return reviews[0][1]
+    counts = Counter(f.id for review, _ in reviews for f in review.findings)
+    collisions = {id for id, count in counts.items() if count > 1} - set(prior_ids)
     priority = {"pass": 0, "needs_work": 1, "blocked": 2}
     selected = max((review for review, _ in reviews), key=lambda r: priority[r.verdict])
     dispositions = ("open", "carried", "closed_by_review", "waived_by_human")
     rows = {}
-    for review, text in reviews:
+    for index, (review, text) in enumerate(reviews):
         source_rows = verdict.finding_rows(text, tuple(f.id for f in review.findings))
         for finding, row in zip(review.findings, source_rows):
+            finding_id = finding.id
+            if seat_names and finding_id in collisions:
+                finding_id = f"{finding.id}-{seat_names[index]}"
+                if finding_id in counts or finding_id in rows:
+                    raise ValueError(f"seat-suffixed finding id already exists: {finding_id}")
+                row = row.replace(finding.id, finding_id, 1)
             rank = (dispositions.index(finding.disposition), finding.severity)
-            if finding.id not in rows or rank < rows[finding.id][0]:
-                rows[finding.id] = (rank, row)
+            if finding_id not in rows or rank < rows[finding_id][0]:
+                rows[finding_id] = (rank, row)
     return (
         f"# Review: {selected.identity} round {selected.round}\n\n## Findings\n\n"
         "| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n"

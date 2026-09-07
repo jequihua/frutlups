@@ -43,6 +43,8 @@ def _text(row):
     if action == "reopened":
         return f"{prefix} reopened: {row['reason']}"
     if action == "usage":
+        if row.get("note") == "unreadable":
+            return f"usage note unreadable={row['count']}"
         return f"{scope} usage " + " ".join(
             f"{key}={row[key] if row[key] is not None else '?'}"
             for key in ("secs", "tokens_in", "tokens_out", "cost_usd")
@@ -50,7 +52,7 @@ def _text(row):
     return f"{prefix} {action}"
 
 
-def _emit(row, root, json_mode):
+def _emit(row, root, json_mode, write=print):
     # Scrub before serializing so JSON escaping cannot hide a secret or local path.
     def scrub(value):
         if isinstance(value, str):
@@ -62,16 +64,21 @@ def _emit(row, root, json_mode):
         return value
 
     row = scrub(row)
-    print(json.dumps(row, ensure_ascii=True) if json_mode else " ".join(_text(row).splitlines()))
+    write(json.dumps(row, ensure_ascii=True) if json_mode else " ".join(_text(row).splitlines()))
 
 
 def _usage(root, model, events):
     keys = ("secs", "tokens_in", "tokens_out", "cost_usd")
-    values = {s.id: {key: [] for key in keys} for m in model.milestones for s in m.slices}
-    prompts, coded = {}, {}
+    values = {
+        item.id: {key: [] for key in keys}
+        for milestone in model.milestones for item in (milestone, *milestone.slices)
+    }
+    prompts, coded, holistic = {}, {}, {}
     for event in events:
         if event.ev == ledger.Ev.prompt:
             prompts[event.slice] = event.data["sha"]
+        if event.ev == ledger.Ev.artifact and event.data.get("role") == "holistic_prompt":
+            holistic.setdefault(event.data["sha"], set()).add(event.data["scope"])
         if event.ev in (ledger.Ev.coded, ledger.Ev.reviewed):
             for key in keys:
                 if key in event.data:
@@ -79,16 +86,28 @@ def _usage(root, model, events):
             if event.ev == ledger.Ev.coded and event.slice in prompts:
                 coded[prompts[event.slice]] = event.slice
     jobs = root / "local_state" / "frutlups" / "jobs"
+    unreadable = 0
     # One level only; no recursive scan of job streams or run state.
     for directory in jobs.iterdir() if jobs.is_dir() else ():
         path = directory / "result.json"
         if directory.is_symlink() or path.is_symlink() or not path.is_file():
             continue
-        result = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            result = None
+        if not isinstance(result, dict):
+            unreadable += 1
+            continue
         sid = coded.get(result.get("prompt_sha"))
         cost = result.get("cost_usd")
         if sid and result.get("role") == "coder" and cost is not None:
             values[sid]["cost_usd"].append(cost)
+        if result.get("role") == "holistic":
+            for mid in holistic.get(result.get("prompt_sha"), ()):
+                for key in keys:
+                    if result.get(key) is not None:
+                        values[mid][key].append(result[key])
     for milestone in model.milestones:
         for item in milestone.slices:
             yield {
@@ -101,12 +120,16 @@ def _usage(root, model, events):
             }
         totals = {}
         for key in keys:
-            numbers = [n for s in milestone.slices for n in values[s.id][key]]
+            numbers = values[milestone.id][key] + [
+                n for s in milestone.slices for n in values[s.id][key]
+            ]
             totals[key] = sum(numbers) if numbers else None
         yield {"action": "usage", "milestone": milestone.id, **totals}
+    if unreadable:
+        yield {"action": "usage", "note": "unreadable", "count": unreadable}
 
 
-def _status(root, usage, json_mode):
+def _status(root, usage, json_mode, write=print):
     cfg = Config.load(root)
     model = roadmap.load(root / "roadmap.yaml")
     events = ledger.read(root / cfg.ledger)
@@ -124,22 +147,29 @@ def _status(root, usage, json_mode):
                     },
                     root,
                     True,
+                    write,
                 )
         following = roadmap.next_slice(model, state)
-        _emit({"action": "next", "slice": following.id if following else None}, root, True)
+        _emit({"action": "next", "slice": following.id if following else None}, root, True, write)
     else:
-        print(ledger.status_text(model, state))
+        write(ledger.status_text(model, state))
     if usage:
         for row in _usage(root, model, events):
-            _emit(row, root, json_mode)
+            _emit(row, root, json_mode, write)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    def write(text):
+        try:
+            print(text)
+        except OSError:
+            pass  # A closed output stream must not interrupt the verb.
+
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] not in VERBS:
-        print(USAGE)
+        write(USAGE)
         raise SystemExit(2)
     parser = argparse.ArgumentParser(prog=f"frutlups {args[0]}")
     parser.add_argument("root", nargs="?", default=".", type=Path)
@@ -153,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     options = parser.parse_args(args[1:])
     root = options.root.resolve()
     json_mode = getattr(options, "json", False)
-    emit = lambda row: _emit(row, root, json_mode)
+    emit = lambda row: _emit(row, root, json_mode, write)
     code = 0
     try:
         if args[0] == "preflight":
@@ -164,7 +194,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 emit({"action": "preflight", "ok": True})
             code = 2 if errors else 0
         elif args[0] == "status":
-            _status(root, options.usage, json_mode)
+            _status(root, options.usage, json_mode, write)
         else:
             reason = loop.run(root, until=options.until, once=options.once, emit=emit)
             if reason == loop.StopReason.preflight_failed:

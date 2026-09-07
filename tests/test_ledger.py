@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -290,6 +291,41 @@ def test_evidence_sha_normalizes_text_but_not_nul_bytes(tmp_path: Path) -> None:
     assert evidence_sha(binary) == hashlib.sha256(binary).hexdigest()
 
 
+@pytest.mark.parametrize(
+    ("data", "normalized"),
+    [
+        pytest.param(b"one\r\ntwo\r\n", b"one\ntwo\n", id="crlf"),
+        pytest.param(b"one\ntwo\n", b"one\ntwo\n", id="lf-twin"),
+        pytest.param(b"one\0\r\ntwo", b"one\0\r\ntwo", id="nul-with-crlf"),
+        pytest.param(b"one\rtwo\r", b"one\rtwo\r", id="lone-cr"),
+    ],
+)
+def test_evidence_sha_matches_template_script(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, data: bytes, normalized: bytes,
+) -> None:
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    for name in ("_common", "_evidence"):
+        spec = importlib.util.spec_from_file_location(
+            name, FIXTURE / "scripts" / f"{name}.py",
+        )
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, name, module)
+        spec.loader.exec_module(module)
+
+    # _evidence uses its imported _common for byte and file digests.
+    template_evidence = module
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(data)
+    digest = evidence_sha(data)
+
+    assert digest == hashlib.sha256(normalized).hexdigest()
+    assert template_evidence.c.evidence_sha_bytes(data) == digest
+    assert template_evidence.c.sha(sample) == digest
+    assert sample.read_bytes() == data
+
+
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-C", str(root), *args], check=True, capture_output=True,
@@ -349,6 +385,45 @@ def test_check_accepts_products_restored_to_head_or_absent_from_head(tmp_path: P
     _write(path, events)
 
     assert check(path, root) == ()
+
+
+@pytest.mark.parametrize(
+    "recorded", [b"base\n", b"latest\n"], ids=("matches-latest", "matches-head"),
+)
+def test_check_accepts_crlf_working_copy_of_lf_blob_like_template(
+    tmp_path: Path, recorded: bytes,
+) -> None:
+    root = _repository(tmp_path)
+    shutil.copytree(FIXTURE, root, dirs_exist_ok=True)
+    assert _git(root, "config", "--get", "core.autocrlf").stdout == b"false\n"
+    assert _git(root, "show", "HEAD:product.txt").stdout == b"base\n"
+    product = root / "product.txt"
+    product.write_bytes(b"base\r\n")
+    prompt = root / "prompt.md"
+    prompt.write_bytes(b"implement\n")
+    path = root / "05_governance" / "ledger.jsonl"
+    _write(path, [
+        {**_prompt(), "sha": hashlib.sha256(prompt.read_bytes()).hexdigest()},
+        _event(
+            "coded", slice="M001-S01", round=1,
+            changed=[{
+                "path": "product.txt", "sha": hashlib.sha256(recorded).hexdigest(),
+                "kind": "modified",
+            }],
+        ),
+    ])
+
+    assert check(path, root) == ()
+    result = subprocess.run(
+        [sys.executable, "-B", str(root / "scripts" / "ledger.py"),
+         "--root", str(root), "check"],
+        check=False, capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "ledger: ok\n"
+    assert result.stderr == ""
+    assert product.read_bytes() == b"base\r\n"
 
 
 def test_check_reports_product_drift_from_latest_and_head(tmp_path: Path) -> None:

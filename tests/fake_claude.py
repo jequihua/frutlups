@@ -2,12 +2,16 @@
 
 import json
 import sys
+import time
 
 from fake_pi import action, report
 
 prompt = sys.stdin.buffer.read().decode("utf-8")
 selected = action(prompt)
 failure = selected.get("failure")
+if failure == "timeout":
+    time.sleep(120)
+    sys.exit(0)
 if failure == "output":
     print("invalid json")
 else:

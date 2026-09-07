@@ -30,6 +30,19 @@ Coder cost estimates come from local job results associated with recorded coding
 reviewer estimates come from the ledger. Unreported quantities appear as `?` (JSON `null`).
 These are sums of available evidence, not billing totals or currency limits.
 
+## Release 0.3.1
+
+- The milestone-close commit is implemented and covered by a fake-seat test (D019, D027).
+  It includes every artifact path recorded for the milestone (D028).
+- Colliding new finding ids from routed seats are suffixed with the seat name (D024, D027).
+- Preflight probes every distinct adapter, provider, and model combination with one read-only
+  job and keeps streams only on failure (D027).
+- Usage rows include holistic jobs, and killed Pi jobs record drained usage in their job
+  results (D019, D023, D027).
+- The evidence hash and the multi-seat corrective round have end-to-end witnesses (D027).
+
+None of these changes were requalified on real seats.
+
 ## Release 0.3.0
 
 Version 0.3.0 is incompatible with 0.2.x projects (D002).
@@ -43,6 +56,7 @@ on real seats (M004-H3).
 
 The milestone-close commit (D019) remains unimplemented and unexercised, so the owner commits
 the holistic prompt, report, and ledger by hand after each milestone close (M003-S01-H6, M004-H3).
+Version 0.3.1 implements the milestone-close commit (D019, D027, D028).
 
-Claude authentication and capacity classification remains text-defined and was not exercised
+Claude authentication and capacity, and Pi capacity, are text-defined and were not exercised
 by the canary (D016).

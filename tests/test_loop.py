@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from frutlups import _preflight, gitws, ledger, loop
+from frutlups import gitws, ledger, loop, verdict
+from frutlups._loop_evidence import workspace_errors
 from frutlups.config import Config, SeatConfig, Timeouts
 from frutlups.procs import STREAM_CAP, run_process
 from frutlups.roadmap import load
@@ -77,19 +79,22 @@ def project(tmp_path, monkeypatch, initialized_project):
         ),
     )
 
-    def auth(argv, cwd, env, timeout, stdout, stderr):
-        assert argv[1] == "auth"
-        return run_process(
-            (sys.executable, "-c", "print('logged in')"),
-            cwd,
-            env,
-            timeout,
-            stdout,
-            stderr,
-        )
-
-    monkeypatch.setattr(_preflight.procs, "run_process", auth)
     return root, cfg, load(root / "roadmap.yaml")
+
+
+@pytest.fixture
+def holistic_project(project):
+    root, cfg, roadmap = project
+    roadmap = replace(
+        roadmap, milestones=(replace(roadmap.milestones[0], holistic_review=True),)
+    )
+    # Keep the fixture script's roadmap in sync for the conformance check.
+    data = yaml.safe_load((root / "roadmap.yaml").read_text(encoding="utf-8"))
+    data["milestones"][0]["holistic_review"] = True
+    (root / "roadmap.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(root, "add", "roadmap.yaml")
+    git(root, "commit", "-qm", "enable holistic fixture")
+    return root, cfg, roadmap
 
 
 def plan(root, **roles):
@@ -296,6 +301,131 @@ def test_all_routed_reviewers_contribute_before_one_review_transition(project):
     conform(root, cfg, roadmap)
 
 
+def test_two_routed_seats_readdress_shared_and_distinct_ids_through_acceptance(project):
+    root, cfg, roadmap = project
+    roadmap = replace(
+        roadmap,
+        review_routing={**roadmap.review_routing, "ordinary": ("reviewer", "claude_reviewer")},
+    )
+    first_shared = "| M001-S01-F1 | P1 | open | First seat's shared id. |"
+    second_shared = "| M001-S01-F1 | P2 | open | Second seat's shared id. |"
+    first_unique = "| M001-S01-F2 | P2 | open | First seat's distinct id. |"
+    second_unique = "| M001-S01-F3 | P1 | open | Second seat's distinct id. |"
+    prior_ids = (
+        "M001-S01-F1-reviewer", "M001-S01-F2",
+        "M001-S01-F1-claude_reviewer", "M001-S01-F3",
+    )
+    open_rows = (
+        "| M001-S01-F1-reviewer | P1 | open | First seat's shared id. |",
+        first_unique,
+        "| M001-S01-F1-claude_reviewer | P2 | open | Second seat's shared id. |",
+        second_unique,
+    )
+    closed_rows = [row.replace("| open |", "| closed_by_review |") for row in open_rows]
+    plan(
+        root,
+        coder=[
+            {"writes": {"07_app/result.txt": "first"}},
+            {"writes": {"07_app/result.txt": "corrected"}},
+        ],
+        reviewer=[
+            {"verdict": "needs_work", "rows": [first_shared, first_unique]},
+            {"verdict": "needs_work", "rows": [second_shared, second_unique]},
+            {"rows": closed_rows},
+            {"rows": closed_rows},
+        ],
+    )
+
+    assert loop.run(root, cfg, roadmap) == loop.StopReason.done
+
+    reviews = events_of(root, cfg, "reviewed")
+    assert len(reviews) == 2
+    for event, round_no, expected_verdict, expected_open, rows in (
+        (reviews[0], 1, "needs_work", prior_ids, open_rows),
+        (reviews[1], 2, "pass", (), tuple(closed_rows)),
+    ):
+        assert event.round == round_no
+        assert event.data["seat"] == "reviewer,claude_reviewer"
+        assert event.data["verdict"] == expected_verdict
+        assert event.data["open"] == expected_open
+        text = (root / event.data["report"]).read_text(encoding="utf-8")
+        parsed = verdict.parse(text)
+        assert tuple(f.id for f in parsed.findings) == prior_ids
+        assert verdict.finding_rows(text, prior_ids) == rows
+    prompts = events_of(root, cfg, "prompt")
+    assert [event.round for event in prompts] == [1, 2]
+    corrective = (root / prompts[1].data["path"]).read_text(encoding="utf-8")
+    for row in open_rows:
+        assert row in corrective
+    assert (root / "local_state" / "coder-1.md").read_text(encoding="utf-8") == corrective
+    assert (root / "local_state" / "reviewer-count.txt").read_text() == "4"
+    assert (root / "local_state" / "coder-count.txt").read_text() == "2"
+    current = state(root, cfg, roadmap).slices["M001-S01"]
+    assert current.step == "accepted"
+    assert current.round == 2
+    assert current.corrective_rounds_used == 1
+    assert current.open_findings == ()
+    accepted = events_of(root, cfg, "accepted")
+    assert len(accepted) == 1
+    assert accepted[0].round == 2
+    conform(root, cfg, roadmap)
+
+
+def test_recorded_architect_dirty_baseline_is_admitted_and_excluded_from_accept(project):
+    root, cfg, roadmap = project
+    cfg = replace(cfg, commit_on_accept=True)
+    baseline_path = "architect-notes.txt"
+    baseline_bytes = b"Architect-owned work in progress.\n"
+    (root / baseline_path).write_bytes(baseline_bytes)
+    assert workspace_errors(root, cfg, ledger.read(root / cfg.ledger)) == [
+        f"unrecorded change: {baseline_path}",
+    ]
+    result = subprocess.run(
+        [sys.executable, "-B", str(root / "scripts" / "prompt.py"),
+         "M001-S01", "--root", str(root), "--allow-dirty"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    prompts = events_of(root, cfg, "prompt")
+    assert len(prompts) == 1
+    prompt = prompts[0]
+    assert prompt.by == "architect"
+    assert prompt.round == 1
+    assert result.stdout == prompt.data["path"] + "\n"
+    assert tuple(dict(row) for row in prompt.data["baseline"]) == ({
+        "path": baseline_path, "sha": ledger.evidence_sha(baseline_bytes), "kind": "added",
+    },)
+    assert state(root, cfg, roadmap).slices["M001-S01"].step == "coding"
+    assert workspace_errors(root, cfg, ledger.read(root / cfg.ledger)) == []
+    original_head = gitws.head(root)
+    plan(root, coder=[{"writes": {"07_app/result.txt": "implemented"}}])
+
+    assert loop.run(root, cfg, roadmap) == loop.StopReason.done
+
+    assert state(root, cfg, roadmap).slices["M001-S01"].step == "accepted"
+    assert events_of(root, cfg, "prompt") == prompts
+    coded = events_of(root, cfg, "coded")
+    assert len(coded) == 1
+    assert tuple(dict(row) for row in coded[0].data["changed"]) == ({
+        "path": "07_app/result.txt", "sha": ledger.evidence_sha(b"implemented"), "kind": "added",
+    },)
+    assert gitws.head(root) != original_head
+    assert git(root, "log", "-1", "--format=%s").stdout.strip() == b"Accept M001-S01 round 1"
+    committed_paths = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+    paths = committed_paths.stdout.decode().splitlines()
+    assert baseline_path not in paths
+    assert "07_app/result.txt" in paths
+    assert cfg.ledger in paths
+    assert git(root, "ls-tree", "--name-only", "HEAD", "--", baseline_path).stdout == b""
+    assert git(root, "show", "HEAD:07_app/result.txt").stdout == b"implemented"
+    assert (root / baseline_path).read_bytes() == baseline_bytes
+    assert git(root, "status", "--porcelain", "--", baseline_path).stdout == (
+        b"?? architect-notes.txt\n"
+    )
+    assert workspace_errors(root, cfg, ledger.read(root / cfg.ledger)) == []
+    conform(root, cfg, roadmap)
+
+
 def test_crash_before_coded_refuses_preflight_with_tree_intact(project, monkeypatch):
     root, cfg, roadmap = project
     plan(root, coder=[{"writes": {"07_app/result.txt": "survives crash"}}])
@@ -327,16 +457,10 @@ def test_resume_each_mid_slice_step(project, iterations):
     conform(root, cfg, roadmap)
 
 
-def test_holistic_reopen_carries_verbatim_rows_then_closes(project):
-    root, cfg, roadmap = project
-    milestone = replace(roadmap.milestones[0], holistic_review=True)
-    roadmap = replace(roadmap, milestones=(milestone,))
-    # Keep the fixture script's roadmap in sync for the conformance check.
-    data = yaml.safe_load((root / "roadmap.yaml").read_text(encoding="utf-8"))
-    data["milestones"][0]["holistic_review"] = True
-    (root / "roadmap.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
-    git(root, "add", "roadmap.yaml")
-    git(root, "commit", "-qm", "enable holistic fixture")
+@pytest.mark.parametrize("commit_on_accept", [True, False])
+def test_holistic_reopen_carries_verbatim_rows_then_closes(holistic_project, commit_on_accept):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=commit_on_accept)
     plan(
         root,
         coder=[
@@ -346,18 +470,220 @@ def test_holistic_reopen_carries_verbatim_rows_then_closes(project):
         holistic=[{"verdict": "needs_work", "rows": [ROW, ROW2]}, {}],
     )
     runner = loop.Loop(root, cfg, roadmap)
-    for _ in range(6):
+    for _ in range(5):
         assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+    assert runner.iteration() is None
+    assert gitws.head(root) == accepted_head
+    artifacts = [
+        e.data["path"] for e in events_of(root, cfg, "artifact") if e.data["scope"] == "M001"
+    ]
+    assert len(artifacts) == 2
+    assert events_of(root, cfg, "milestone_done") == []
     reopened = state(root, cfg, roadmap).slices["M001-S01"]
     assert reopened.reopen_reason == "holistic findings M001-S01-H1, M001-S01-H2"
     assert reopened.reopen_report
     assert reopened.round == 2
-    assert loop.run(root, cfg, roadmap) == loop.StopReason.done
+    for _ in range(5):
+        assert runner.iteration() is None
+    if commit_on_accept:
+        assert git(root, "log", "-1", "--format=%s").stdout.strip() == b"Accept M001-S01 round 2"
+        paths = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+        assert set(artifacts) <= set(paths.stdout.decode().splitlines())
+        for path in artifacts:
+            assert git(root, "show", f"HEAD:{path}").stdout == (root / path).read_bytes()
+        assert gitws.is_clean(root)
+    else:
+        assert gitws.head(root) == accepted_head
+    assert runner.iteration() is None
+    assert runner.iteration() == loop.StopReason.done
     prompt = (root / "local_state" / "coder-1.md").read_text(encoding="utf-8")
     assert ROW in prompt
     assert ROW2 in prompt
     assert len(events_of(root, cfg, "reopened")) == 1
     assert state(root, cfg, roadmap).milestones_done == frozenset({"M001"})
+    conform(root, cfg, roadmap)
+
+
+@pytest.mark.parametrize("commit_on_accept", [True, False])
+def test_holistic_pass_commits_exact_close_evidence(holistic_project, commit_on_accept):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=commit_on_accept)
+    runner = loop.Loop(root, cfg, roadmap)
+    for _ in range(5):
+        assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+
+    assert runner.iteration() is None
+
+    assert state(root, cfg, roadmap).milestones_done == frozenset({"M001"})
+    artifacts = {
+        e.data["role"]: e.data["path"]
+        for e in events_of(root, cfg, "artifact") if e.data["scope"] == "M001"
+    }
+    assert set(artifacts) == {"holistic_prompt", "holistic_report"}
+    if commit_on_accept:
+        assert git(root, "log", "-1", "--format=%s").stdout.strip() == b"Close M001"
+        assert git(root, "rev-parse", "HEAD^").stdout.decode().strip() == accepted_head
+        paths = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+        assert set(paths.stdout.decode().splitlines()) == {*artifacts.values(), cfg.ledger}
+        committed = git(root, "show", f"HEAD:{cfg.ledger}").stdout.decode()
+        done = [json.loads(line) for line in committed.splitlines()][-1]
+        assert done["ev"] == "milestone_done"
+        assert done["milestone"] == "M001"
+        assert done["holistic_report"] == artifacts["holistic_report"]
+        assert gitws.status(root) == ()
+    else:
+        assert gitws.head(root) == accepted_head
+    # The subsequent done stop is a separate append-only ledger transition.
+    assert runner.iteration() == loop.StopReason.done
+    conform(root, cfg, roadmap)
+
+
+def test_holistic_format_retry_pass_commits_every_milestone_artifact(holistic_project):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=True)
+    plan(root, holistic=[{"text": "broken holistic report"}, {}])
+    runner = loop.Loop(root, cfg, roadmap)
+    for _ in range(5):
+        assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+
+    assert runner.iteration() is None
+
+    artifacts = [
+        e for e in events_of(root, cfg, "artifact") if e.data["scope"] == "M001"
+    ]
+    assert [e.data["role"] for e in artifacts] == [
+        "holistic_prompt", "holistic_prompt", "holistic_report",
+    ]
+    assert [e.round for e in artifacts] == ["holistic", "holistic", "holistic"]
+    original, retry, report = artifacts
+    original_text = (root / original.data["path"]).read_text(encoding="utf-8")
+    retry_text = (root / retry.data["path"]).read_text(encoding="utf-8")
+    assert retry.data["path"] != original.data["path"]
+    assert retry_text.startswith(original_text)
+    assert retry_text.count("Format-only retry:") == 1
+    assert (root / "local_state" / "holistic-0.md").read_text(encoding="utf-8") == original_text
+    assert (root / "local_state" / "holistic-1.md").read_text(encoding="utf-8") == retry_text
+    assert (root / "local_state" / "holistic-count.txt").read_text() == "2"
+    assert state(root, cfg, roadmap).milestones_done == frozenset({"M001"})
+    assert git(root, "log", "-1", "--format=%s").stdout.strip() == b"Close M001"
+    assert git(root, "rev-parse", "HEAD^").stdout.decode().strip() == accepted_head
+    paths = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+    assert set(paths.stdout.decode().splitlines()) == {
+        original.data["path"], retry.data["path"], report.data["path"], cfg.ledger,
+    }
+    for event in artifacts:
+        committed = git(root, "show", f"HEAD:{event.data['path']}").stdout
+        assert committed == (root / event.data["path"]).read_bytes()
+        assert ledger.evidence_sha(committed) == event.data["sha"]
+    committed_ledger = git(root, "show", f"HEAD:{cfg.ledger}").stdout
+    assert committed_ledger == (root / cfg.ledger).read_bytes()
+    done = json.loads(committed_ledger.splitlines()[-1])
+    assert done["ev"] == "milestone_done"
+    assert done["milestone"] == "M001"
+    assert done["holistic_report"] == report.data["path"]
+    # Inspect the Close transition before a subsequent done stop appends to the ledger.
+    assert gitws.status(root) == ()
+    conform(root, cfg, roadmap)
+
+
+def test_holistic_format_retry_exhaustion_names_last_job_result(holistic_project):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=True)
+    plan(root, holistic=[{"text": "broken holistic report"}, {"text": "still broken holistic"}])
+    runner = loop.Loop(root, cfg, roadmap)
+    for _ in range(5):
+        assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+
+    assert runner.iteration() == loop.StopReason.seat_output
+
+    assert (root / "local_state" / "holistic-count.txt").read_text() == "2"
+    artifacts = [
+        e for e in events_of(root, cfg, "artifact") if e.data["scope"] == "M001"
+    ]
+    assert [e.data["role"] for e in artifacts] == ["holistic_prompt", "holistic_prompt"]
+    assert [e.round for e in artifacts] == ["holistic", "holistic"]
+    retry_text = (root / artifacts[1].data["path"]).read_text(encoding="utf-8")
+    assert retry_text.count("Format-only retry:") == 1
+    assert (root / "local_state" / "holistic-1.md").read_text(encoding="utf-8") == retry_text
+    stop = events_of(root, cfg, "stop")[-1]
+    assert stop.data["reason"] == "seat_output"
+    detail = stop.data["detail"]
+    match = re.search(r"\blocal_state/frutlups/jobs/[0-9a-f]{32}/result\.json\b", detail)
+    assert match is not None
+    assert str(root) not in detail
+    result = json.loads((root / match[0]).read_text(encoding="utf-8"))
+    assert result["role"] == "holistic"
+    assert result["final_text"] == "still broken holistic"
+    assert result["prompt_sha"] == artifacts[1].data["sha"]
+    assert events_of(root, cfg, "milestone_done") == []
+    assert events_of(root, cfg, "reopened") == []
+    assert state(root, cfg, roadmap).milestones_done == frozenset()
+    assert gitws.head(root) == accepted_head
+    conform(root, cfg, roadmap)
+
+
+def test_holistic_close_refuses_unrelated_staged_paths_before_done(holistic_project, monkeypatch):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=True)
+    runner = loop.Loop(root, cfg, roadmap)
+    for _ in range(5):
+        assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+    append = runner.append
+
+    def stage_unrelated(ev, **data):
+        append(ev, **data)
+        if ev == "artifact" and data["role"] == "holistic_report":
+            (root / "unrelated.txt").write_text("preserve staged work", encoding="utf-8")
+            git(root, "add", "unrelated.txt")
+
+    monkeypatch.setattr(runner, "append", stage_unrelated)
+
+    assert runner.iteration() == loop.StopReason.path_violation
+
+    assert events_of(root, cfg, "milestone_done") == []
+    assert gitws.head(root) == accepted_head
+    assert events_of(root, cfg, "stop")[-1].data["detail"] == (
+        "unrelated staged paths: unrelated.txt"
+    )
+    assert git(root, "show", ":unrelated.txt").stdout == b"preserve staged work"
+    conform(root, cfg, roadmap)
+
+
+def test_holistic_commit_failure_preserves_done_and_names_milestone(holistic_project, monkeypatch):
+    root, cfg, roadmap = holistic_project
+    cfg = replace(cfg, commit_on_accept=True)
+    runner = loop.Loop(root, cfg, roadmap)
+    for _ in range(5):
+        assert runner.iteration() is None
+    accepted_head = gitws.head(root)
+
+    def fail_commit(root, paths, message, *, executable):
+        assert message == "Close M001"
+        assert executable == cfg.git
+        assert len(events_of(root, cfg, "milestone_done")) == 1
+        git(root, "add", "-A", "--", *paths)
+        raise subprocess.CalledProcessError(1, ["git", "commit"])
+
+    monkeypatch.setattr(gitws, "commit", fail_commit)
+
+    assert runner.iteration() == loop.StopReason.internal
+
+    assert gitws.head(root) == accepted_head
+    assert state(root, cfg, roadmap).milestones_done == frozenset({"M001"})
+    stop = events_of(root, cfg, "stop")[-1]
+    assert stop.data["detail"].startswith("M001: CalledProcessError:")
+    staged = git(root, "diff", "--cached", "--name-only").stdout.decode().splitlines()
+    artifacts = {
+        e.data["path"] for e in events_of(root, cfg, "artifact") if e.data["scope"] == "M001"
+    }
+    assert set(staged) == artifacts | {cfg.ledger}
+    assert '"ev":"milestone_done"' in git(root, "show", f":{cfg.ledger}").stdout.decode()
+    assert all((root / path).is_file() for path in artifacts)
     conform(root, cfg, roadmap)
 
 
@@ -445,6 +771,16 @@ def test_format_only_retry_is_bounded(project, valid_second):
         encoding="utf-8",
     )
     assert len(events_of(root, cfg, "prompt")) == 1
+    if not valid_second:
+        detail = events_of(root, cfg, "stop")[-1].data["detail"]
+        match = re.search(r"\blocal_state/frutlups/jobs/[0-9a-f]{32}/result\.json\b", detail)
+        assert match is not None
+        assert str(root) not in detail
+        result_path = root / match[0]
+        assert result_path.is_file()
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        assert result["final_text"] == "broken again"
+        assert result["role"] == "reviewer"
     conform(root, cfg, roadmap)
 
 
@@ -466,9 +802,9 @@ def test_preflight_authentication_failure_is_read_only(project, monkeypatch, fai
     root, cfg, roadmap = project
     captured = []
 
-    def auth(argv, cwd, env, timeout, stdout, stderr):
-        assert argv[1] == "auth"
-        assert timeout == 30
+    def probe(argv, cwd, env, timeout, stdout, stderr, stdin_bytes=None):
+        assert "auth" not in argv
+        assert timeout == 60
         code = "import sys; print('not authenticated'); sys.exit(1)"
         if failure == "streams":
             code = (
@@ -485,13 +821,14 @@ def test_preflight_authentication_failure_is_read_only(project, monkeypatch, fai
         captured.append((argv, env, stdout, stderr))
         return result
 
-    monkeypatch.setattr(_preflight.procs, "run_process", auth)
+    monkeypatch.setattr(pi, "run_process", probe)
+    monkeypatch.setattr(claude, "run_process", probe)
     before = gitws.status(root)
     ledger_before = (root / cfg.ledger).read_bytes()
 
     assert loop.run(root, cfg, roadmap) == loop.StopReason.preflight_failed
     assert len(captured) == 2
-    assert all(env["FRUTLUPS_SEAT"] == "verification" for _, env, _, _ in captured)
+    assert all(env["FRUTLUPS_SEAT"] == "reviewer" for _, env, _, _ in captured)
     assert all(stdout.exists() and stderr.exists() for _, _, stdout, stderr in captured)
     assert gitws.status(root) == before
     assert (root / cfg.ledger).read_bytes() == ledger_before
@@ -521,8 +858,8 @@ def test_preflight_probe_timeout_kills_launcher_and_grandchild(project, tmp_path
     launcher.write_text(f'@echo off\n"{sys.executable}" "{script}" %*\n', encoding="utf-8")
     results = []
 
-    def auth(argv, cwd, env, timeout, stdout, stderr):
-        assert timeout == 30
+    def probe(argv, cwd, env, timeout, stdout, stderr, stdin_bytes=None):
+        assert timeout == 60
         pid_file = tmp_path / f"grandchild-{len(results)}.pid"
         result = run_process((str(launcher), str(pid_file)), cwd, env, 1, stdout, stderr)
         assert result.timed_out is True
@@ -531,7 +868,8 @@ def test_preflight_probe_timeout_kills_launcher_and_grandchild(project, tmp_path
         results.append((int(pid_file.read_text()), stdout, stderr))
         return result
 
-    monkeypatch.setattr(_preflight.procs, "run_process", auth)
+    monkeypatch.setattr(pi, "run_process", probe)
+    monkeypatch.setattr(claude, "run_process", probe)
     before = gitws.status(root)
     ledger_before = (root / cfg.ledger).read_bytes()
     started = time.monotonic()
@@ -570,19 +908,15 @@ def test_failed_coder_edits_are_fenced_and_preserved_without_retry(project, fail
 
 
 @pytest.mark.parametrize("route", [("reviewer",), ("reviewer", "claude_reviewer")])
-def test_saved_seat_text_scrubs_paths_without_truncating_reports(project, monkeypatch, route):
-    root, cfg, roadmap = project
+def test_saved_seat_text_scrubs_paths_without_truncating_reports(
+    holistic_project, monkeypatch, route,
+):
+    root, cfg, roadmap = holistic_project
     cfg = replace(cfg, commit_on_accept=True)
     roadmap = replace(
         roadmap,
-        milestones=(replace(roadmap.milestones[0], holistic_review=True),),
         review_routing={**roadmap.review_routing, "ordinary": route},
     )
-    data = yaml.safe_load((root / "roadmap.yaml").read_text(encoding="utf-8"))
-    data["milestones"][0]["holistic_review"] = True
-    (root / "roadmap.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
-    git(root, "add", "roadmap.yaml")
-    git(root, "commit", "-qm", "enable holistic fixture")
     monkeypatch.setenv("FIXTURE_SECRET", "synthetic-seat-secret")
     tail = "x" * 6000 + " TAIL-MARKER"
     paths = (

@@ -11,7 +11,7 @@ from pathlib import Path
 
 def action(prompt):
     directory = Path("local_state")
-    role = os.environ["FRUTLUPS_SEAT"]
+    role = "probe" if prompt.strip() == "Reply with OK only." else os.environ["FRUTLUPS_SEAT"]
     counter = directory / f"{role}-count.txt"
     index = int(counter.read_text()) if counter.exists() else 0
     plan = json.loads((directory / "plan.json").read_text(encoding="utf-8"))
@@ -30,6 +30,8 @@ def action(prompt):
 
 
 def report(prompt, selected):
+    if prompt.strip() == "Reply with OK only.":
+        return "OK"
     if "text" in selected:
         return selected["text"]
     scope = re.search(r"# Review prompt: (M\d{3}(?:-S\d{2})?)", prompt)[1]
@@ -57,7 +59,7 @@ def main():
     if failure == "transport":
         sys.exit(1)
     if failure == "timeout":
-        time.sleep(30)
+        time.sleep(120)
         return
     text = (
         selected.get("text", "Implemented scripted fixture change.")

@@ -1,9 +1,12 @@
+import hashlib
 import io
 import json
 import os
 import subprocess
 import sys
 from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import test_loop
@@ -11,9 +14,12 @@ from test_loop import events_of, plan, state
 
 from frutlups import _preflight, cli, ledger, loop
 from frutlups.config import Config, ConfigError
-from frutlups.procs import ProcessResult
+from frutlups.procs import ProcessResult, run_process
+from frutlups.seats import Role
 
 project = test_loop.project
+holistic_project = test_loop.holistic_project
+CLAUDE_ARGV = _preflight.claude._argv
 
 
 def invoke(capsys, *args):
@@ -114,6 +120,187 @@ def test_status_and_usage_conform_to_template(configured, capsys, json_mode):
         assert output.startswith(expected)
         assert "tokens_in=30 tokens_out=7 cost_usd=0.03" in output
         assert "M001 usage " in output
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+def test_status_usage_includes_only_matching_holistic_jobs(
+    holistic_project, monkeypatch, capsys, json_mode,
+):
+    root, cfg, model = holistic_project
+    monkeypatch.setattr(Config, "load", lambda root: cfg)
+    assert loop.run(root, cfg, model) == loop.StopReason.done
+    capsys.readouterr()
+    events = ledger.read(root / cfg.ledger)
+    sha = next(e.data["sha"] for e in events if e.data.get("role") == "holistic_prompt")
+    report_sha = next(e.data["sha"] for e in events if e.data.get("role") == "holistic_report")
+    jobs = root / "local_state/frutlups/jobs"
+    results = [json.loads((d / "result.json").read_text()) for d in jobs.iterdir()]
+    holistic = next(result for result in results if result["role"] == "holistic")
+    extra = {
+        "role": "holistic", "prompt_sha": sha,
+        "secs": 5, "tokens_in": 11, "tokens_out": 13, "cost_usd": 0.5,
+    }
+    for name, result in {
+        "retry": extra,
+        "unknown": {**extra, "secs": None, "tokens_in": None, "tokens_out": None, "cost_usd": None},
+        "wrong-hash": {**extra, "prompt_sha": "unrelated"},
+        "report-hash": {**extra, "prompt_sha": report_sha},
+        "wrong-role": {**extra, "role": "reviewer"},
+        "coder-role": {**extra, "role": "coder"},
+        "nested/child": extra,
+    }.items():
+        directory = jobs / name
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_text(json.dumps(result), encoding="utf-8")
+
+    code, output = invoke(capsys, "status", root, "--usage", *(["--json"] if json_mode else []))
+
+    assert code == 0, output
+    slice_secs = sum(e.data["secs"] for e in events if e.ev in ("coded", "reviewed"))
+    milestone_secs = slice_secs + holistic["secs"] + 5
+    if json_mode:
+        rows = [json.loads(line) for line in output.splitlines()]
+        assert [row["action"] for row in rows] == ["status", "next", "usage", "usage"]
+        assert rows[2]["slice"] == "M001-S01"
+        assert rows[2]["secs"] == slice_secs
+        assert rows[2]["tokens_in"] == 30
+        assert rows[2]["tokens_out"] == 7
+        assert rows[2]["cost_usd"] == pytest.approx(0.03)
+        assert rows[3]["milestone"] == "M001"
+        assert rows[3]["secs"] == pytest.approx(milestone_secs)
+        assert rows[3]["tokens_in"] == 54
+        assert rows[3]["tokens_out"] == 24
+        assert rows[3]["cost_usd"] == pytest.approx(0.55)
+    else:
+        line = next(line for line in output.splitlines() if line.startswith("M001 usage "))
+        fields = dict(field.split("=") for field in line.split()[2:])
+        assert float(fields["secs"]) == pytest.approx(milestone_secs)
+        assert fields["tokens_in"] == "54"
+        assert fields["tokens_out"] == "24"
+        assert float(fields["cost_usd"]) == pytest.approx(0.55)
+        assert "usage note" not in output
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+def test_status_usage_counts_unreadable_results_after_milestones(
+    configured, monkeypatch, capsys, json_mode,
+):
+    root, _, _ = configured
+    jobs = root / "local_state/frutlups/jobs"
+    for name, data in {
+        "malformed": b"{", "empty": b"", "list": b"[]", "scalar": b"7",
+        "null": b"null", "encoding": b"\xff", "denied": b"{}",
+        "object": b"{}", "nested/child": b"{",
+    }.items():
+        directory = jobs / name
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_bytes(data)
+    read_text = Path.read_text
+
+    def read(path, *args, **kwargs):
+        if path == jobs / "denied/result.json":
+            raise PermissionError("synthetic unreadable result")
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read)
+    code, output = invoke(capsys, "status", root, "--usage", *(["--json"] if json_mode else []))
+
+    assert code == 0
+    if json_mode:
+        rows = [json.loads(line) for line in output.splitlines()]
+        assert rows[-2]["milestone"] == "M001"
+        assert rows[-1] == {"action": "usage", "note": "unreadable", "count": 7}
+        assert sum("note" in row for row in rows) == 1
+    else:
+        lines = output.splitlines()
+        assert lines[-2].startswith("M001 usage ")
+        assert lines[-1] == "usage note unreadable=7"
+        assert output.count("usage note") == 1
+
+
+def test_usage_matches_holistic_artifacts_to_each_milestone(project):
+    root, _, model = project
+    first = model.milestones[0]
+    model = replace(model, milestones=(
+        replace(first, slices=()), replace(first, id="M002", slices=()),
+        replace(first, id="M003", slices=()),
+    ))
+    events = tuple(
+        SimpleNamespace(ev=ledger.Ev.artifact, data={
+            "role": "holistic_prompt", "scope": mid, "sha": sha,
+        })
+        for mid, sha in (
+            ("M001", "shared"), ("M001", "shared"), ("M002", "shared"), ("M002", "extra"),
+        )
+    )
+    jobs = root / "local_state/frutlups/jobs"
+    for sha, amount in (("shared", 2), ("extra", 3)):
+        directory = jobs / sha
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_text(json.dumps({
+            "role": "holistic", "prompt_sha": sha, "secs": amount,
+            "tokens_in": amount * 10, "tokens_out": amount * 100, "cost_usd": amount / 10,
+        }), encoding="utf-8")
+    unreadable = jobs / "unreadable"
+    unreadable.mkdir()
+    (unreadable / "result.json").write_text("invalid json", encoding="utf-8")
+
+    rows = list(cli._usage(root, model, events))
+
+    assert [row["milestone"] for row in rows[:-1]] == ["M001", "M002", "M003"]
+    for row, amount in zip(rows[:2], (2, 5)):
+        assert row["secs"] == amount
+        assert row["tokens_in"] == amount * 10
+        assert row["tokens_out"] == amount * 100
+        assert row["cost_usd"] == amount / 10
+    assert rows[2]["secs"] is None
+    assert rows[2]["tokens_in"] is None
+    assert rows[2]["tokens_out"] is None
+    assert rows[2]["cost_usd"] is None
+    assert rows[3] == {"action": "usage", "note": "unreadable", "count": 1}
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+@pytest.mark.parametrize(
+    ("verb", "expected"), [("preflight", 2), ("status", 0), ("run", 0), ("internal", 1)],
+)
+def test_main_drops_rows_on_broken_stdout(
+    configured, monkeypatch, capsys, verb, expected, json_mode,
+):
+    root, cfg, model = configured
+    attempts = []
+
+    class ClosedOutput:
+        def write(self, text):
+            attempts.append(text)
+            raise BrokenPipeError("synthetic closed stdout")
+
+    if verb == "preflight":
+        (root / "STOP").touch()
+    if verb == "internal":
+        def broken(*args, **kwargs):
+            raise RuntimeError("synthetic internal failure")
+
+        monkeypatch.setattr(loop, "run", broken)
+    args = ["run" if verb == "internal" else verb, str(root)]
+    if verb == "run":
+        args.append("--once")
+    if verb == "status":
+        args.append("--usage")
+    if json_mode and verb != "preflight":
+        args.append("--json")
+    with monkeypatch.context() as output_patch:
+        output_patch.setattr(sys, "stdout", ClosedOutput())
+        with pytest.raises(SystemExit) as caught:
+            cli.main(args)
+
+    assert caught.value.code == expected
+    assert attempts
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == ""
+    if verb == "run":
+        assert state(root, cfg, model).slices["M001-S01"].step == "coding"
 
 
 @pytest.mark.parametrize("json_mode", [False, True])
@@ -220,7 +407,115 @@ def test_preflight_only_probes_active_routes(project, monkeypatch):
     calls = []
     monkeypatch.setattr(_preflight, "_probe", lambda root, cfg, name, env: calls.append(name))
     assert loop.preflight(root, cfg, model) == ()
-    assert calls == ["coder", "holistic"]  # reviewer shares the holistic auth command
+    assert calls == ["coder", "holistic"]  # reviewer shares the holistic model
+
+
+@pytest.mark.parametrize("same_model", [False, True])
+def test_preflight_probes_each_distinct_claude_model(project, monkeypatch, same_model):
+    root, cfg, model = project
+    holistic = cfg.seats["holistic"]
+    reviewer = replace(
+        holistic, model=holistic.model if same_model else "other-model", effort="low",
+    )
+    cfg = replace(cfg, seats={**cfg.seats, "reviewer": reviewer})
+    calls = []
+    run = _preflight.claude.ClaudeSeat.run
+
+    def probe(self, job, config):
+        calls.append(job)
+        seat = config.seats[job.seat_name]
+        assert job.role is Role.reviewer
+        assert job.adapter == seat.adapter
+        assert job.provider == seat.provider
+        assert job.model == seat.model
+        assert job.effort == seat.effort
+        assert job.tools == _preflight.claude.READ_TOOLS
+        assert job.timeout == 60
+        assert job.expected_notes_path is None
+        assert job.cwd == root
+        assert job.prompt_path.is_relative_to(root / "local_state/frutlups")
+        assert job.prompt_path.read_bytes() == b"Reply with OK only.\n"
+        assert job.prompt_sha == hashlib.sha256(job.prompt_path.read_bytes()).hexdigest()
+        return run(self, job, config)
+
+    monkeypatch.setattr(_preflight.claude.ClaudeSeat, "run", probe)
+    assert loop.preflight(root, cfg, model) == ()
+    assert [job.seat_name for job in calls] == (
+        ["holistic"] if same_model else ["holistic", "reviewer"]
+    )
+    assert list((root / "local_state/frutlups/jobs").iterdir()) == []
+    assert (root / "local_state/probe-count.txt").read_text() == ("2" if same_model else "3")
+
+
+@pytest.mark.parametrize("adapter", ["pi", "claude"])
+@pytest.mark.parametrize("failure", [None, "auth", "capacity", "transport", "output", "timeout"])
+def test_preflight_probe_plan_preserves_roles_and_keeps_only_failed_job(
+    project, monkeypatch, adapter, failure,
+):
+    root, cfg, model = project
+    cfg = replace(cfg, seats={
+        name: replace(seat, model="probe-model") if seat.adapter == adapter else seat
+        for name, seat in cfg.seats.items()
+    })
+    selected = {"failure": failure} if failure else {}
+    plan(
+        root,
+        probe=[selected, {}] if adapter == "pi" else [{}, selected],
+        coder=[{"failure": "auth"}],
+        reviewer=[{"failure": "auth"}],
+    )
+    module = _preflight.pi if adapter == "pi" else _preflight.claude
+    seat_class = module.PiSeat if adapter == "pi" else module.ClaudeSeat
+    run = seat_class.run
+    captured = []
+
+    def probe(self, job, config):
+        assert job.role is Role.reviewer
+        assert job.tools == module.READ_TOOLS
+        assert job.timeout == 60
+        result = run(self, job, config)
+        captured.append(result)
+        return result
+
+    if failure == "timeout":
+        def short_timeout(argv, cwd, env, timeout, stdout, stderr, stdin_bytes=None):
+            assert timeout == 60
+            return run_process(argv, cwd, env, 1, stdout, stderr, stdin_bytes)
+
+        monkeypatch.setattr(module, "run_process", short_timeout)
+    monkeypatch.setattr(seat_class, "run", probe)
+    before = (root / cfg.ledger).read_bytes()
+    plan_before = (root / "local_state/plan.json").read_bytes()
+
+    errors = loop.preflight(root, cfg, model)
+
+    assert len(captured) == 1
+    result = captured[0]
+    directories = list((root / "local_state/frutlups/jobs").iterdir())
+    if failure:
+        assert result.status == ("timed_out" if failure == "timeout" else "failed")
+        assert result.failure_class == failure
+        assert directories == [result.stdout_path.parent]
+        assert result.stdout_path.is_file()
+        assert result.stderr_path.is_file()
+        assert (directories[0] / "prompt.md").read_bytes() == b"Reply with OK only.\n"
+        name = "coder" if adapter == "pi" else "holistic"
+        seat = cfg.seats[name]
+        assert errors == (
+            f"model probe failed: {name}: adapter={adapter} provider={seat.provider} "
+            f"model=probe-model; failure={failure}; diagnostic: {result.diagnostic}; "
+            f"stderr: (empty); streams: {directories[0].relative_to(root).as_posix()}",
+        )
+    else:
+        assert errors == ()
+        assert result.status == "completed"
+        assert result.final_text == "OK"
+        assert directories == []
+    assert (root / "local_state/probe-count.txt").read_text() == "2"
+    assert not (root / "local_state/coder-count.txt").exists()
+    assert not (root / "local_state/reviewer-count.txt").exists()
+    assert (root / "local_state/plan.json").read_bytes() == plan_before
+    assert (root / cfg.ledger).read_bytes() == before
 
 
 @pytest.mark.parametrize("timed_out", [False, True])
@@ -229,13 +524,14 @@ def test_auth_refusal_retains_streams_and_scrubs_tail(configured, monkeypatch, c
     monkeypatch.setenv("FIXTURE_SECRET", "synthetic-auth-secret")
     captured = []
 
-    def probe(argv, cwd, env, timeout, stdout, stderr):
+    def probe(argv, cwd, env, timeout, stdout, stderr, stdin_bytes=None):
         stdout.write_text("raw output")
         stderr.write_text("x" * 5000 + f"\n{root}/private synthetic-auth-secret\nauth denied")
         captured.append((stdout, stderr))
         return ProcessResult(1, timed_out, 30, stdout, stderr, None)
 
-    monkeypatch.setattr(_preflight.procs, "run_process", probe)
+    monkeypatch.setattr(_preflight.pi, "run_process", probe)
+    monkeypatch.setattr(_preflight.claude, "run_process", probe)
     before = (root / cfg.ledger).read_bytes()
     code, output = invoke(capsys, "run", root, "--json")
     assert code == 2
@@ -245,7 +541,7 @@ def test_auth_refusal_retains_streams_and_scrubs_tail(configured, monkeypatch, c
     assert "auth denied" in output
     assert len(output) < 10000
     if timed_out:
-        assert "timed out" in output
+        assert "failure=timeout" in output
     rows = [json.loads(line) for line in output.splitlines()]
     assert len(rows) == 2
     for stdout, stderr in captured:
@@ -303,26 +599,30 @@ def test_preflight_collects_independent_refusals(configured, monkeypatch, capsys
 def test_claude_missing_auth_verb_uses_read_only_probe(project, monkeypatch, outcome):
     root, cfg, _ = project
     calls = []
+    monkeypatch.setattr(_preflight.claude, "_argv", CLAUDE_ARGV)
 
     def probe(argv, cwd, env, timeout, stdout, stderr, stdin_bytes=None):
         calls.append((argv, stdout, stderr))
-        if len(calls) == 1:
-            stderr.write_text("error: unknown command 'auth'")
-            return ProcessResult(1, False, 0, stdout, stderr, None)
-        assert argv[argv.index("--tools") + 1] == ""
+        assert "auth" not in argv
+        assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
+        assert argv[argv.index("--model") + 1] == cfg.seats["holistic"].model
+        assert argv[argv.index("--effort") + 1] == cfg.seats["holistic"].effort
         assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
         assert argv[argv.index("--mcp-config") + 1] == '{"mcpServers":{}}'
-        assert stdin_bytes == b"Reply with OK only."
+        assert stdin_bytes == b"Reply with OK only.\n"
+        assert timeout == 60
+        assert env["FRUTLUPS_SEAT"] == "reviewer"
+        stderr.write_text("")
         body = {"is_error": outcome == "auth_error", "result": "OK"}
         stdout.write_text("invalid json" if outcome == "malformed" else json.dumps(body))
         return ProcessResult(0, outcome == "timeout", 0, stdout, stderr, None)
 
-    monkeypatch.setattr(_preflight.procs, "run_process", probe)
-    error = _preflight._probe(root, cfg, "holistic", {})
+    monkeypatch.setattr(_preflight.claude, "run_process", probe)
+    error = _preflight._probe(root, cfg, "holistic")
     assert (error is None) == (outcome == "ok")
-    assert len(calls) == 2
-    assert calls[0][2].read_text() == "error: unknown command 'auth'"
-    assert all(stdout.exists() and stderr.exists() for _, stdout, stderr in calls)
+    assert len(calls) == 1
+    assert all(stdout.exists() == (outcome != "ok") for _, stdout, _ in calls)
+    assert all(stderr.exists() == (outcome != "ok") for _, _, stderr in calls)
 
 
 def test_commit_failure_reports_slice_and_internal_exit(configured, monkeypatch, capsys):

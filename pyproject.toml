@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "frutlups"
-version = "0.3.0"
+version = "0.3.1"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0.3,<7"]
 
@@ -18,7 +18,7 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
-    "unverified_until_m004: text-defined seat failure case awaiting real qualification",
+    "text_defined: seat failure case defined by the text rules of contracts 3.8 (D016); no recorded sample",
 ]
 
 [tool.ruff]

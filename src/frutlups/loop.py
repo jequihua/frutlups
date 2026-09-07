@@ -106,6 +106,17 @@ class Loop:
         if errors:
             raise _Stop(StopReason.path_violation, "; ".join(errors) + "; owner must inspect")
 
+    def _refuse_unrelated_staged(self, paths):
+        unrelated = [
+            row.path
+            for row in gitws.status(self.root, executable=self.cfg.git)
+            if row.code[0] not in (" ", "?") and row.path not in paths
+        ]
+        if unrelated:
+            raise _Stop(
+                StopReason.path_violation, "unrelated staged paths: " + ", ".join(unrelated)
+            )
+
     def _artifact(self, scope, round_no, role, path, sha):
         self.append("artifact", scope=scope, round=round_no, role=role, path=path, sha=sha)
 
@@ -147,7 +158,8 @@ class Loop:
             result = adapter.run(job, self.cfg)
             directory = self.root / "local_state" / "frutlups" / "jobs" / job.id
             directory.mkdir(parents=True, exist_ok=True)
-            (directory / "result.json").write_text(
+            result_path = directory / "result.json"
+            result_path.write_text(
                 json.dumps(
                     {**asdict(result), "role": role.value, "prompt_sha": job.prompt_sha},
                     default=str,
@@ -164,7 +176,7 @@ class Loop:
                     StopReason.path_violation, "read-only seat changed files; owner must inspect"
                 )
             if result.status == "completed":
-                return result, results
+                return result, results, result_path.relative_to(self.root).as_posix()
             if result.failure_class in (FailureClass.auth, FailureClass.capacity):
                 reason = (
                     StopReason.seat_auth
@@ -188,7 +200,7 @@ class Loop:
                         diagnostic=(
                             f"{result.diagnostic}; files left by failed attempt: {', '.join(paths)}"
                         ),
-                    ), results
+                    ), results, result_path.relative_to(self.root).as_posix()
             if not retry[0]:
                 raise _Stop(
                     StopReason.seat_transport,
@@ -200,7 +212,7 @@ class Loop:
         results = []
         retry = [1]
         for attempt in range(2):
-            result, attempts = self._call(name, role, path, retry=retry)
+            result, attempts, result_path = self._call(name, role, path, retry=retry)
             results.extend(attempts)
             try:
                 text = receipt.scrub_text(result.final_text or "", self.root, dict(os.environ))
@@ -223,7 +235,7 @@ class Loop:
             except verdict.VerdictError as exc:
                 if attempt:
                     raise _Stop(
-                        StopReason.seat_output, f"{exc}; inspect review and resume"
+                        StopReason.seat_output, f"{exc}; inspect {result_path} and resume"
                     ) from exc
                 text = repo_path(self.root, path).read_text(encoding="utf-8")
                 text += f"\nFormat-only retry: {exc}\nCorrect the report format.\n"
@@ -269,7 +281,7 @@ class Loop:
             )
             self.append("prompt", **scope, path=path, sha=sha, baseline=list(baseline))
         elif current.step == "coding":
-            result, attempts = self._call(
+            result, attempts, _ = self._call(
                 "coder",
                 Role.coder,
                 current.last_prompt,
@@ -379,7 +391,11 @@ class Loop:
                 )
                 reviews.append((parsed, report))
                 results.extend(attempts)
-            report = evidence.combined_review(reviews)
+            report = evidence.combined_review(
+                reviews,
+                seat_names=route,
+                prior_ids=evidence.prior_finding_ids(self.root, current),
+            )
             parsed = verdict.parse(report)
             path, sha = evidence.write_text(
                 self.root,
@@ -419,15 +435,7 @@ class Loop:
                 if row["path"] in eligible
             ]
             if self.cfg.commit_on_accept:
-                unrelated = [
-                    row.path
-                    for row in gitws.status(self.root, executable=self.cfg.git)
-                    if row.code[0] not in (" ", "?") and row.path not in paths
-                ]
-                if unrelated:
-                    raise _Stop(
-                        StopReason.path_violation, "unrelated staged paths: " + ", ".join(unrelated)
-                    )
+                self._refuse_unrelated_staged(paths)
             self.append("accepted", **scope)
             commit = None
             if self.cfg.commit_on_accept:
@@ -465,11 +473,11 @@ class Loop:
                 milestone,
             ),
         )
-        path, sha = evidence.write_text(
+        prompt_path, sha = evidence.write_text(
             self.root, self.cfg.review_prompt_dir, f"{milestone.id}_holistic.md", text, 24576
         )
-        self._artifact(milestone.id, "holistic", "holistic_prompt", path, sha)
-        parsed, text, _ = self._review("holistic", Role.holistic, path, milestone.id, None)
+        self._artifact(milestone.id, "holistic", "holistic_prompt", prompt_path, sha)
+        parsed, text, _ = self._review("holistic", Role.holistic, prompt_path, milestone.id, None)
         path, sha = evidence.write_text(
             self.root,
             directory,
@@ -479,7 +487,17 @@ class Loop:
         )
         self._artifact(milestone.id, "holistic", "holistic_report", path, sha)
         if parsed.verdict == "pass":
+            relevant = [
+                e
+                for e in ledger.read(self.root / self.cfg.ledger)
+                if e.ev == ledger.Ev.artifact and e.data["scope"] == milestone.id
+            ]
+            paths = sorted(evidence.evidence_paths(relevant) | {self.cfg.ledger})
+            if self.cfg.commit_on_accept:
+                self._refuse_unrelated_staged(paths)
             self.append("milestone_done", milestone=milestone.id, holistic_report=path)
+            if self.cfg.commit_on_accept:
+                gitws.commit(self.root, paths, f"Close {milestone.id}", executable=self.cfg.git)
         else:
             for item in milestone.slices:
                 ids = [f for f in verdict.open_blocking(parsed) if f.startswith(item.id + "-")]
@@ -498,7 +516,7 @@ class Loop:
 
     def iteration(self):
         """Perform one transition (including its bounded retries); return a stop or None."""
-        item = None
+        item = active = None
         try:
             events = ledger.read(self.root / self.cfg.ledger)
             state = ledger.fold(events, self.roadmap)
@@ -527,7 +545,8 @@ class Loop:
         except _Stop as exc:
             reason, detail = exc.reason, exc.detail
         except Exception as exc:  # noqa: BLE001 - Preserve the tree and record internal stops.
-            scope = f"{item.id}: " if item else ""
+            scope = item or active
+            scope = f"{scope.id}: " if scope else ""
             reason = StopReason.internal
             detail = f"{scope}{type(exc).__name__}: {exc}; owner must inspect"
         detail = receipt._scrub(detail.encode("utf-8"), self.root, dict(os.environ))
