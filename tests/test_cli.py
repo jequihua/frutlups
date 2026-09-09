@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import test_ledger
 import test_loop
 from test_loop import events_of, plan, state
 
@@ -67,6 +68,7 @@ def test_once_outputs_one_transition_and_resumes(configured, capsys, json_mode):
         ]
         assert rows[0]["tokens_in"] == 17
         assert rows[0]["tokens_out"] == 3
+        assert rows[0]["cost_usd"] == 0.01
         assert rows[0]["seats"] == [
             {"name": "coder", "adapter": "pi", "model": "fake", "effort": "medium"}
         ]
@@ -120,6 +122,49 @@ def test_status_and_usage_conform_to_template(configured, capsys, json_mode):
         assert output.startswith(expected)
         assert "tokens_in=30 tokens_out=7 cost_usd=0.03" in output
         assert "M001 usage " in output
+
+
+@pytest.mark.parametrize("json_mode", [False, True])
+@pytest.mark.parametrize(("cost", "local_copy"), [(0, True), (0.5, True), (0.5, False)])
+def test_usage_combines_coded_event_cost_and_legacy_result_fallback(
+    configured, capsys, json_mode, cost, local_copy,
+):
+    root, cfg, _ = configured
+    old_sha, new_sha = "1" * 64, "2" * 64
+    test_ledger._write(root / cfg.ledger, [
+        {**test_ledger._prompt(), "sha": old_sha},
+        test_ledger._coded(),
+        test_ledger._verified(False),
+        {**test_ledger._prompt(2), "sha": new_sha},
+        test_ledger._coded(2, cost_usd=cost),
+    ])
+    results = {
+        "legacy-attempt": {"role": "coder", "prompt_sha": old_sha, "cost_usd": 0.125},
+        "legacy-retry": {"role": "coder", "prompt_sha": old_sha, "cost_usd": 0.125},
+        "wrong-role": {"role": "reviewer", "prompt_sha": old_sha, "cost_usd": 99},
+        "wrong-prompt": {"role": "coder", "prompt_sha": "3" * 64, "cost_usd": 99},
+    }
+    if local_copy:
+        results["already-recorded"] = {"role": "coder", "prompt_sha": new_sha, "cost_usd": 99}
+    for name, result in results.items():
+        directory = root / "local_state/frutlups/jobs" / name
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_text(json.dumps(result), encoding="utf-8")
+
+    code, output = invoke(capsys, "status", root, "--usage", *(["--json"] if json_mode else []))
+
+    assert code == 0, output
+    if json_mode:
+        rows = [json.loads(line) for line in output.splitlines()]
+        usage = [row for row in rows if row["action"] == "usage"]
+        assert len(usage) == 2
+        assert usage[0]["slice"] == "M001-S01"
+        assert usage[1]["milestone"] == "M001"
+        assert usage[0]["cost_usd"] == cost + 0.25
+        assert usage[1]["cost_usd"] == cost + 0.25
+    else:
+        for scope in ("M001-S01", "M001"):
+            assert f"{scope} usage secs=? tokens_in=? tokens_out=? cost_usd={cost + 0.25}" in output
 
 
 @pytest.mark.parametrize("json_mode", [False, True])

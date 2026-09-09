@@ -4,10 +4,12 @@ import json
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import frutlups.ledger as ledger_module
 import pytest
+import yaml
 from frutlups.ledger import (
     Ev,
     LedgerError,
@@ -18,7 +20,7 @@ from frutlups.ledger import (
     read,
     status_text,
 )
-from frutlups.roadmap import load
+from frutlups.roadmap import load, next_slice
 
 FIXTURE = Path(__file__).parent / "fixtures" / "v4_project"
 STAMP = "2026-09-03T10:00:00Z"
@@ -85,6 +87,7 @@ FOLD_CASES = [
     pytest.param([], "unstarted", 1, id="none"),
     pytest.param([_prompt()], "coding", 1, id="prompt"),
     pytest.param([_prompt(), _coded()], "verifying", 1, id="coded"),
+    pytest.param([_prompt(), _coded(cost_usd=0.25)], "verifying", 1, id="coded-cost"),
     pytest.param(_through_verified(False), "fix", 2, id="verified-failed"),
     pytest.param(_through_verified(), "reviewing", 1, id="verified-passed"),
     pytest.param(
@@ -149,6 +152,90 @@ def test_all_eleven_event_types_are_declared() -> None:
         "prompt", "artifact", "coded", "verified", "reviewed", "accepted",
         "reopened", "unblocked", "milestone_done", "note", "stop",
     }
+
+
+@pytest.mark.parametrize("kind", ["coded", "reviewed"])
+@pytest.mark.parametrize("cost", [0, 1, 0.0, 0.25])
+def test_optional_cost_preserves_numeric_value(tmp_path, kind, cost):
+    event = _coded(cost_usd=cost) if kind == "coded" else {**_reviewed("pass"), "cost_usd": cost}
+    events = [_prompt(), event] if kind == "coded" else [*_through_verified(), event]
+    parsed = _parsed(tmp_path, events)
+
+    assert parsed[-1].data["cost_usd"] == cost
+    assert type(parsed[-1].data["cost_usd"]) is type(cost)
+    current = fold(parsed, load(FIXTURE / "roadmap.yaml")).slices["M001-S01"]
+    assert current.step == ("verifying" if kind == "coded" else "accept_pending")
+
+
+@pytest.mark.parametrize("kind", ["coded", "reviewed"])
+@pytest.mark.parametrize("cost", [-1, -0.25, True, False, "1", None])
+def test_cost_refuses_invalid_numeric_values(tmp_path, kind, cost):
+    event = _coded(cost_usd=cost) if kind == "coded" else {**_reviewed("pass"), "cost_usd": cost}
+    with pytest.raises(LedgerError) as caught:
+        _parsed(tmp_path, [event])
+    assert str(caught.value) == "line 1: invalid text, usage, or actor field"
+
+
+@pytest.mark.parametrize(
+    ("statuses", "accepted", "reopened", "done", "expected"),
+    [
+        (("active", "active"), (1,), (), (), "M002-S01"),
+        (("active", "planned"), (1,), (), (), None),
+        (("active", "done"), (1,), (), (), None),
+        (("active", "done", "done"), (2, 3), (3, 2), (), "M002-S01"),
+        (("active", "active"), (1, 2), (), (1, 2), None),
+        (("active", "active"), (1,), (), (1,), "M002-S01"),
+    ],
+    ids=("skip-accepted-active", "skip-planned", "skip-done", "reopen-roadmap-order",
+         "all-accepted", "milestone-done-does-not-gate"),
+)
+def test_next_slice_matches_template_on_same_ledger(
+    tmp_path, statuses, accepted, reopened, done, expected,
+):
+    project = tmp_path / "project"
+    shutil.copytree(FIXTURE, project)
+    path = project / "roadmap.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    base = data["milestones"][0]
+    data["milestones"] = [
+        {**base, "id": f"M{index:03}", "status": status, "holistic_review": True,
+         "slices": [{**base["slices"][0], "id": f"M{index:03}-S01"}]}
+        for index, status in enumerate(statuses, 1)
+    ]
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    events = [
+        {**event, "slice": f"M{index:03}-S01"}
+        for index in accepted for event in _accepted_events()
+    ]
+    events += [_event("milestone_done", milestone=f"M{index:03}") for index in done]
+    events += [
+        _event("reopened", slice=f"M{index:03}-S01", round=2, reason="holistic finding")
+        for index in reopened
+    ]
+    ledger_path = project / "05_governance/ledger.jsonl"
+    _write(ledger_path, events)
+    model = load(path)
+    state = fold(read(ledger_path), model)
+    following = next_slice(model, state)
+
+    assert (following.id if following else None) == expected
+    # Selection depends on slice state and roadmap status, even if this set is stale.
+    all_done = frozenset(m.id for m in model.milestones)
+    assert next_slice(model, replace(state, milestones_done=all_done)) == following
+    for script, command, output in (
+        ("roadmap.py", "next", f"{expected or 'none'}\n"),
+        ("ledger.py", "status", status_text(model, state) + "\n"),
+    ):
+        # The template's next CLI lives in roadmap.py and delegates to ledger.next_slice.
+        args = [sys.executable, "-B", str(project / "scripts" / script)]
+        if script == "roadmap.py":
+            args += [command, "--root", str(project)]
+        else:
+            args += ["--root", str(project), command]
+        result = subprocess.run(args, capture_output=True, text=True, check=False)
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+        assert result.stdout == output
 
 
 @pytest.mark.parametrize(

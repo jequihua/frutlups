@@ -42,7 +42,7 @@ class Slice:
 
 @dataclass(frozen=True)
 class Milestone:
-    id: str; title: str; status: Literal["planned", "active"]; risk: str
+    id: str; title: str; status: Literal["planned", "active", "done"]; risk: str
     holistic_review: bool; slices: tuple[Slice, ...]
 
 
@@ -147,7 +147,7 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
             memory_root = memory.get("root", "").rstrip("/") + "/"
         _strings(memory.get("read_verbs"), "memory.read_verbs", errors, True)
         _paths(memory.get("read_first_pages"), "memory.read_first_pages", errors)
-    milestones, active = data.get("milestones"), 0
+    milestones, active, done = data.get("milestones"), 0, 0
     if not isinstance(milestones, list) or not milestones:
         errors.append("milestones must be a non-empty list")
         milestones = []
@@ -164,14 +164,15 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
             ids.add(mid)
         if not isinstance(milestone.get("title"), str) or not milestone.get("title", "").strip():
             errors.append(f"{where}.title must be non-empty")
-        if milestone.get("status") not in ("planned", "active"):
-            errors.append(f"{where}.status must be planned or active")
+        if milestone.get("status") not in ("planned", "active", "done"):
+            errors.append(f"{where}.status must be planned, active, or done")
         if milestone.get("risk") not in ("ordinary", "high", "release"):
             errors.append(f"{where}.risk is invalid")
         if not isinstance(milestone.get("holistic_review"), bool):
             errors.append(f"{where}.holistic_review must be boolean")
         items = milestone.get("slices")
         active += milestone.get("status") == "active"
+        done += milestone.get("status") == "done"
         if not isinstance(items, list) or not items:
             errors.append(f"{where}.slices must be non-empty")
             continue
@@ -228,8 +229,8 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
             _paths(item.get("memory_pages", []), f"{sw}.memory_pages", errors)
             if len(yaml.safe_dump(item, sort_keys=False).encode()) > 2048:
                 warnings.append(f"{sid}: slice entry exceeds 2 KB")
-    if milestones and not active:
-        errors.append("at least one milestone must be active")
+    if milestones and not active and done != len(milestones):
+        errors.append("at least one milestone must be active unless all milestones are done")
     for key, prefix in (("ruled_out", "R"), ("not_yet_specified", "N")):
         rows = data.get(key, [])
         if not isinstance(rows, list):
@@ -318,13 +319,13 @@ def next_slice(roadmap: Roadmap, state: object) -> Slice | None:
     step = lambda item: getattr(states.get(item.id), "step", "unstarted")
     for milestone in roadmap.milestones:
         for item in milestone.slices:
-            if getattr(states.get(item.id), "reopened", False):
+            if getattr(states.get(item.id), "reopened", False) and step(item) != "accepted":
                 return item
-    active = next(
-        (model for model in roadmap.milestones if model.status == "active"), None,
-    )
-    if active:
-        return next((item for item in active.slices if step(item) != "accepted"), None)
+    for milestone in roadmap.milestones:
+        if milestone.status == "active":
+            for item in milestone.slices:
+                if step(item) != "accepted":
+                    return item
     return None
 
 

@@ -127,6 +127,32 @@ def test_combined_review_preserves_distinct_id_order_when_replacing_shared_row()
     )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_combined_review_matches_shared_id_with_pipes_in_summary(reverse):
+    shared_id = "M001-S01-F1"
+    winning = r"|M001-S01-F1|P2|open|Keep `left|right`, left\|right, and final \||"
+    other = "| M001-S01-F1 | P2 | closed_by_review | Other summary. |"
+    unrelated = "| M001-S01-F2 | P3 | carried | Mentions M001-S01-F1 | in its summary. |"
+    reviews = [report([winning], "needs_work"), report([other, unrelated])]
+
+    text = combined_review(
+        reviews[::-1] if reverse else reviews,
+        seat_names=("reviewer", "claude_reviewer"), prior_ids=(shared_id,),
+    )
+
+    merged = verdict.parse(text)
+    assert len(merged.findings) == 2
+    finding = next(f for f in merged.findings if f.id == shared_id)
+    assert finding.id == shared_id
+    assert finding.severity == "P2"
+    assert finding.disposition == "open"
+    assert finding.summary == "Keep `left | right`, left|right, and final |"
+    assert verdict.finding_rows(text, (shared_id,)) == (winning,)
+    assert verdict.finding_rows(text, ("M001-S01-F2",)) == (unrelated,)
+    assert verdict.open_blocking(merged) == (shared_id,)
+    assert merged.verdict == "needs_work"
+
+
 @pytest.mark.parametrize("prior_ids", [(), ("M001-S01-F1",)])
 def test_combined_review_returns_single_seat_text_unchanged(prior_ids):
     _, text = report(["| M001-S01-F1 | P3 | carried | Keep exact formatting. |"])

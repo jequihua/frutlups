@@ -340,7 +340,7 @@ class Loop:
                 changed=changed,
                 notes_path=notes,
                 seat="coder",
-                **evidence.usage(attempts, coder=True),
+                **evidence.usage(attempts),
             )
         elif current.step == "verifying":
             self._clean()

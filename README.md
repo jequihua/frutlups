@@ -26,9 +26,21 @@ and stop reasons.
 
 Status text matches the template's `scripts/ledger.py status`. `--usage` adds per-slice and
 per-milestone sums of recorded seat seconds, input/output tokens, and reported cost estimates.
-Coder cost estimates come from local job results associated with recorded coding prompts;
+A coder job's `cost_usd` is recorded on its `coded` event when the adapter reports one,
+and `status --usage` reads the local job result only for `coded` events recorded before
+that field existed;
 reviewer estimates come from the ledger. Unreported quantities appear as `?` (JSON `null`).
 These are sums of available evidence, not billing totals or currency limits.
+
+## Release 0.3.2
+
+- The conformance fixture and this project's scripts follow template v4.0.2 (D029).
+- Milestone status accepts `done`, and `next_slice` scans every active milestone in roadmap
+  order, skipping fully accepted milestones (D029).
+- Finding summaries may contain literal or escaped pipes (D029).
+- A coder job's `cost_usd` is recorded on its `coded` event when reported (D029).
+
+None of these changes were requalified on real seats.
 
 ## Release 0.3.1
 

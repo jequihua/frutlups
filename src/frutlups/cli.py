@@ -83,7 +83,10 @@ def _usage(root, model, events):
             for key in keys:
                 if key in event.data:
                     values[event.slice][key].append(event.data[key])
-            if event.ev == ledger.Ev.coded and event.slice in prompts:
+            if (
+                event.ev == ledger.Ev.coded and "cost_usd" not in event.data
+                and event.slice in prompts
+            ):
                 coded[prompts[event.slice]] = event.slice
     jobs = root / "local_state" / "frutlups" / "jobs"
     unreadable = 0

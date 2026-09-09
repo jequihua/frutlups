@@ -47,7 +47,9 @@ def _report_lines(text: str, names: tuple[str, ...]) -> list[str]:
 
 
 def _cells(line: str) -> list[str]:
-    return [item.strip() for item in line.strip().strip("|").split("|")]
+    row = re.sub(r"^\||(?<!\\)\|$", "", line.strip())
+    cells = [item.strip().replace(r"\|", "|") for item in re.split(r"(?<!\\)\|", row)]
+    return cells[:3] + [" | ".join(cells[3:])] if len(cells) > 4 else cells
 
 
 def parse(text: str) -> Review:

@@ -43,7 +43,7 @@ FIELDS = {
     Ev.artifact: {"scope", "round", "role", "path", "sha"},
     Ev.coded: {
         "slice", "round", "changed", "notes_path", "seat", "secs", "tokens_in",
-        "tokens_out",
+        "tokens_out", "cost_usd",
     },
     Ev.verified: {"slice", "round", "receipt", "sha", "ok"},
     Ev.reviewed: {
@@ -59,7 +59,7 @@ FIELDS = {
 }
 OPTIONAL = {
     Ev.prompt: {"baseline"},
-    Ev.coded: {"notes_path", "seat", "secs", "tokens_in", "tokens_out"},
+    Ev.coded: {"notes_path", "seat", "secs", "tokens_in", "tokens_out", "cost_usd"},
     Ev.reviewed: {"seat", "secs", "tokens_in", "tokens_out", "cost_usd"},
     Ev.accepted: {"commit"},
     Ev.milestone_done: {"holistic_report"},

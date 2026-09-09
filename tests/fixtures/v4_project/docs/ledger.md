@@ -10,7 +10,7 @@
 | --- | --- |
 | `prompt` | `slice`, `round`, prompt `path`, `sha`; optional dirty `baseline` changed objects |
 | `artifact` | slice/milestone `scope`, positive round or `holistic`, `role`, `path`, `sha` |
-| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage |
+| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage including `cost_usd` |
 | `verified` | `slice`, `round`, receipt `receipt`, `sha`, `ok` |
 | `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open ids, optional usage |
 | `accepted` | `slice`, `round`, optional already-known `commit` |
@@ -66,8 +66,10 @@ Events are applied in file order for each roadmap slice:
 | `reopened(new r)` | `fix` at new r |
 
 Wrong/decreasing rounds, illegal transitions, and unknown ids are errors. Next
-is the first open reopened slice, then the first non-accepted slice in the first
-active milestone. A holistic milestone also requires `milestone_done`.
+is the first open reopened slice in roadmap order. Otherwise, scan active
+milestones in order for the first non-accepted slice, skipping fully accepted
+ones. Planned/done milestones are skipped. Selection does not require
+`milestone_done`; holistic completion still does.
 
 Corrective rounds count prompt events above round 1; transport retries do not.
 Every candidate is validated and folded before append, so refusal changes no
@@ -99,6 +101,9 @@ status and one evidence line. The final verdict is:
 `Verdict: pass|needs_work|blocked|override - next: <one move>`
 
 `pass`/`override` refuse open P0-P2; only a human records `override`.
+
+Rows split on unescaped pipes; cells after the first three join with ` | ` as
+the summary. `\|` decodes to `|`. Fewer than four cells remain invalid.
 
 In a holistic report, every P0-P2 finding id begins with its affected slice id,
 for example `M001-S02-H1-F1`. Open findings are grouped by slice and cause one

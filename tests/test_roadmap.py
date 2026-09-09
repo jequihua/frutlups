@@ -137,7 +137,8 @@ INVALID_CASES = [
     pytest.param(_duplicate(("milestones",)), "duplicate id M001", id="milestone-duplicate"),
     pytest.param(_set(M + ("title",), ""), ".title must be non-empty", id="milestone-title"),
     pytest.param(
-        _set(M + ("status",), "done"), ".status must be planned or active", id="milestone-status"
+        _set(M + ("status",), "bad"),
+        ".status must be planned, active, or done", id="milestone-status"
     ),
     pytest.param(_set(M + ("risk",), "bad"), ".risk is invalid", id="milestone-risk"),
     pytest.param(
@@ -255,6 +256,50 @@ def test_loads_fixture_roadmap_as_frozen_model() -> None:
         roadmap.project = "changed"  # type: ignore[misc]
 
 
+@pytest.mark.parametrize(
+    ("statuses", "errors"),
+    [
+        (("active", "planned", "done"), ()),
+        (("done", "done"), ()),
+        (("active", "bad"), ("milestones[1].status must be planned, active, or done",)),
+        (("planned",), ("at least one milestone must be active unless all milestones are done",)),
+        (("done", "planned"),
+         ("at least one milestone must be active unless all milestones are done",)),
+    ],
+    ids=("all-statuses", "all-done", "invalid-status", "planned-only", "done-and-planned"),
+)
+def test_milestone_status_rules_match_template(tmp_path, statuses, errors):
+    project = tmp_path / "project"
+    shutil.copytree(FIXTURE, project)
+    data = _base()
+    base = data["milestones"][0]
+    data["milestones"] = []
+    for index, status in enumerate(statuses, 1):
+        milestone = copy.deepcopy(base)
+        milestone.update(id=f"M{index:03}", status=status)
+        milestone["slices"][0]["id"] = f"M{index:03}-S01"
+        data["milestones"].append(milestone)
+    path = project / "roadmap.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, "-B", str(project / "scripts/roadmap.py"), "check",
+         "--root", str(project)],
+        capture_output=True, text=True, check=False,
+    )
+
+    assert result.returncode == (2 if errors else 0)
+    assert result.stdout == ("" if errors else "roadmap: ok\n")
+    assert result.stderr == "".join(f"error: {message}\n" for message in errors)
+    if errors:
+        with pytest.raises(RoadmapError) as caught:
+            load(path)
+        assert caught.value.errors == errors
+        assert result.stderr == "".join(f"error: {message}\n" for message in caught.value.errors)
+    else:
+        assert tuple(m.status for m in load(path).milestones) == statuses
+
+
 def test_next_slice_prioritizes_sticky_reopens_then_active_order_then_none() -> None:
     roadmap = load(ROADMAP)
     first = roadmap.milestones[0].slices[0]
@@ -270,7 +315,7 @@ def test_next_slice_prioritizes_sticky_reopens_then_active_order_then_none() -> 
         }
     )
     assert next_slice(roadmap, state) == first
-    state.slices[first.id] = SimpleNamespace(step="accepted", reopened=False)
+    state.slices[first.id] = SimpleNamespace(step="accepted", reopened=True)
     assert next_slice(roadmap, state) == third
     state.slices[third.id] = SimpleNamespace(step="accepted", reopened=False)
     assert next_slice(roadmap, state) == second

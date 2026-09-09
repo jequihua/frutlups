@@ -1,5 +1,11 @@
+import json
+import subprocess
+import sys
+from dataclasses import asdict
+from pathlib import Path
+
 import pytest
-from frutlups.verdict import VerdictError, open_blocking, parse
+from frutlups.verdict import VerdictError, _cells, open_blocking, parse
 
 
 def _report(
@@ -29,6 +35,72 @@ def test_parse_returns_frozen_review_and_open_blocking_ids() -> None:
     assert review.identity == "M001-S01"
     assert review.round == 1
     assert open_blocking(review) == ("M001-S01-F1",)
+
+
+@pytest.mark.parametrize(
+    ("row", "summary"),
+    [
+        ("| F1 | P2 | open | Use `left|right`. |", "Use `left | right`."),
+        (r"| F1 | P2 | open | Use left\|right. |", "Use left|right."),
+        (r"| F1 | P2 | open | `left|right` and left\|right. |",
+         "`left | right` and left|right."),
+        (r"| F1 | P2 | open | Ends in \|", "Ends in |"),
+        (r"|F1|P2|open|Ends in \||", "Ends in |"),
+        ("| F1 | P2 | open |", None),
+        ("| F1 | P2 | open |   |", None),
+    ],
+    ids=("backticks", "gfm-escaped", "mixed", "escaped-ending", "compact-escaped-ending",
+         "three-cells", "empty-summary"),
+)
+def test_findings_rows_match_template(row: str, summary: str | None) -> None:
+    text = _report(row, "needs_work")
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", (
+            "import json, sys\n"
+            "from _evidence import parse_review\n"
+            "try:\n"
+            "    result = parse_review(sys.stdin.read())\n"
+            "except ValueError as exc:\n"
+            "    result = {'error': str(exc)}\n"
+            "print(json.dumps(result))\n"
+        )],
+        cwd=Path(__file__).parent / "fixtures/v4_project/scripts",
+        input=text, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    template = json.loads(result.stdout)
+
+    if summary is None:
+        with pytest.raises(VerdictError) as caught:
+            parse(text)
+        assert str(caught.value) == f"invalid findings row: {row}"
+        assert str(caught.value) == template["error"]
+    else:
+        review = parse(text)
+        assert len(review.findings) == 1
+        finding = review.findings[0]
+        assert finding.id == "F1"
+        assert finding.severity == "P2"
+        assert finding.disposition == "open"
+        assert finding.summary == summary
+        assert [asdict(finding)] == template["findings"]
+
+
+@pytest.mark.parametrize(
+    ("row", "expected"),
+    [
+        (" F1 | P2 | open | Summary ", ["F1", "P2", "open", "Summary"]),
+        ("|F1|P2|open|Summary", ["F1", "P2", "open", "Summary"]),
+        ("F1|P2|open|Summary|", ["F1", "P2", "open", "Summary"]),
+        ("||F1|P2|open|Summary||", ["", "F1", "P2", "open | Summary | "]),
+        (r"|F1|P2|open|two \\| pipes|", ["F1", "P2", "open", r"two \| pipes"]),
+    ],
+    ids=("no-outer-pipes", "leading-only", "trailing-only", "one-outer-pipe-only",
+         "immediate-backslash"),
+)
+def test_cells_delimiters_and_immediate_backslash_rule(row, expected):
+    assert _cells(row) == expected
 
 
 @pytest.mark.parametrize(

@@ -173,6 +173,7 @@ def test_initial_pass_with_fake_seats_and_conformant_ledger(project):
     assert current.step == "accepted"
     assert current.round == 1
     assert events_of(root, cfg, "coded")[0].data["tokens_in"] == 17
+    assert events_of(root, cfg, "coded")[0].data["cost_usd"] == 0.01
     assert events_of(root, cfg, "reviewed")[0].data["tokens_in"] == 13
     assert events_of(root, cfg, "artifact")[0].data["role"] == "review_prompt"
     report_path = current.last_report
