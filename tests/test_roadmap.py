@@ -17,7 +17,7 @@ from frutlups.roadmap import (
     slice_by_id,
 )
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v4_project"
+FIXTURE = Path(__file__).parent / "fixtures" / "v5_development"
 ROADMAP = FIXTURE / "roadmap.yaml"
 MEMORY = {
     "kind": "llloom",
@@ -74,7 +74,7 @@ S = M + ("slices", 0)
 
 INVALID_CASES = [
     pytest.param(_set(("extra",), True), "roadmap: unknown key", id="top-unknown"),
-    pytest.param(_set(("schema",), "wrong"), "schema must be", id="schema"),
+    pytest.param(_set(("schema",), "wrong"), "unsupported roadmap schema", id="schema"),
     pytest.param(_set(("project",), ""), "project must be", id="project"),
     pytest.param(_set(("brief",), "../brief"), "brief: unsafe", id="brief-path"),
     pytest.param(
@@ -209,11 +209,7 @@ INVALID_CASES = [
         ".memory_pages: unsafe",
         id="slice-memory-page-path",
     ),
-    pytest.param(
-        _set(M + ("status",), "planned"),
-        "at least one milestone must be active",
-        id="active-milestone",
-    ),
+    pytest.param(_set(M + ("status",), "planned"), None, id="active-milestone"),
     pytest.param(_set(("ruled_out",), "bad"), "ruled_out must be a list", id="ruled-out-list"),
     pytest.param(
         _set(("ruled_out",), [{"id": "bad", "text": "x"}]),
@@ -238,10 +234,15 @@ def test_load_refuses_each_template_validation_error(tmp_path: Path, mutate, mes
     path = tmp_path / "roadmap.yaml"
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    with pytest.raises(RoadmapError) as error:
-        load(path)
-
-    assert message in str(error.value)
+    if message is None:
+        # Retain the original node; the accepted idle contract supersedes its refusal.
+        model = load(path)
+        assert tuple(m.status for m in model.milestones) == ("planned",)
+        assert model.milestones[0].slices[0].id == "M001-S01"
+    else:
+        with pytest.raises(RoadmapError) as error:
+            load(path)
+        assert message in str(error.value)
 
 
 def test_loads_fixture_roadmap_as_frozen_model() -> None:
@@ -256,15 +257,31 @@ def test_loads_fixture_roadmap_as_frozen_model() -> None:
         roadmap.project = "changed"  # type: ignore[misc]
 
 
+@pytest.mark.parametrize("mutate,message", [
+    (_set(("milestones",), []), "milestones must be a non-empty list"),
+    (_set(M + ("slices",), []), "milestones[0].slices must be non-empty"),
+    (_set(M + ("id",), "invalid"), "milestones[0].id must match Mnnn"),
+    (_set(S + ("id",), "invalid"), "milestones[0].slices[0].id must match M001-Snn"),
+])
+def test_idle_shape_keeps_strict_nonempty_structure(tmp_path, mutate, message):
+    data = _base()
+    data["milestones"][0]["status"] = "planned"
+    mutate(data)
+    path = tmp_path / "roadmap.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(RoadmapError) as caught:
+        load(path)
+    assert message in caught.value.errors
+
+
 @pytest.mark.parametrize(
     ("statuses", "errors"),
     [
         (("active", "planned", "done"), ()),
         (("done", "done"), ()),
         (("active", "bad"), ("milestones[1].status must be planned, active, or done",)),
-        (("planned",), ("at least one milestone must be active unless all milestones are done",)),
-        (("done", "planned"),
-         ("at least one milestone must be active unless all milestones are done",)),
+        (("planned",), ()),
+        (("done", "planned"), ()),
     ],
     ids=("all-statuses", "all-done", "invalid-status", "planned-only", "done-and-planned"),
 )
@@ -288,14 +305,14 @@ def test_milestone_status_rules_match_template(tmp_path, statuses, errors):
         capture_output=True, text=True, check=False,
     )
 
-    assert result.returncode == (2 if errors else 0)
-    assert result.stdout == ("" if errors else "roadmap: ok\n")
-    assert result.stderr == "".join(f"error: {message}\n" for message in errors)
+    template_errors = errors
+    assert result.returncode == (2 if template_errors else 0)
+    assert result.stdout == ("" if template_errors else "roadmap: ok\n")
+    assert result.stderr == "".join(f"error: {message}\n" for message in template_errors)
     if errors:
         with pytest.raises(RoadmapError) as caught:
             load(path)
         assert caught.value.errors == errors
-        assert result.stderr == "".join(f"error: {message}\n" for message in caught.value.errors)
     else:
         assert tuple(m.status for m in load(path).milestones) == statuses
 
@@ -326,6 +343,12 @@ def test_next_slice_prioritizes_sticky_reopens_then_active_order_then_none() -> 
 def test_render_markdown_matches_template_script(tmp_path: Path) -> None:
     project = tmp_path / "project"
     shutil.copytree(FIXTURE, project)
+    from test_ledger import _git
+    _git(project, "init", "-q")
+    _git(project, "config", "user.email", "test@example.invalid")
+    _git(project, "config", "user.name", "Test")
+    _git(project, "add", ".")
+    _git(project, "commit", "-qm", "native roadmap")
     result = subprocess.run(
         [sys.executable, str(project / "scripts" / "roadmap.py"), "render", "--root", str(project)],
         check=False,
@@ -346,3 +369,50 @@ def test_slice_size_warning_does_not_refuse_load(tmp_path: Path) -> None:
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     assert load(path).milestones[0].slices[0].notes == "x" * 3000
+
+
+def test_v2_retains_runtime_profile_and_verification_declarations(tmp_path):
+    data = _base()
+    data.update(schema="frutlups.roadmap/2", runtime={"python": "3.14.3"},
+                autonomy={"schema": "frutlups.autonomy/1"})
+    data["verification"].update(git_boundary=["python", "check.py"],
+                                observation="clean_checkout", timeout_seconds=900)
+    path = tmp_path / "roadmap.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    model = load(path)
+    assert model.schema == data["schema"]
+    assert model.runtime == data["runtime"]
+    assert model.autonomy == data["autonomy"]
+    assert model.verification_git_boundary == ("python", "check.py")
+    assert model.verification_observation == "clean_checkout"
+    assert model.verification_timeout_seconds == 900
+    with pytest.raises(TypeError):
+        model.autonomy["extra"] = True
+    baseline = load(ROADMAP)
+    assert baseline.schema == "frutlups.roadmap/2"
+    assert baseline.runtime == {}
+    assert baseline.autonomy is None
+    assert baseline.verification_git_boundary is None
+    assert baseline.verification_observation == "process"
+    assert baseline.verification_timeout_seconds == 600
+    with pytest.raises(RoadmapError, match="unsupported roadmap schema"):
+        load(FIXTURE.parent / "v4_project/roadmap.yaml")
+
+
+@pytest.mark.parametrize("schema,key,value", [
+    ("frutlups.roadmap/1", "autonomy", {"schema": "frutlups.autonomy/1"}),
+    ("frutlups.roadmap/1", "runtime", {"python": "3.14"}),
+    *[("frutlups.roadmap/2", "autonomy", value) for value in
+      (None, {}, {"schema": "frutlups.autonomy/2"},
+       {"schema": "frutlups.autonomy/1", "reset": True})],
+    ("frutlups.roadmap/2", "runtime", {"python": "2.7"}),
+    ("frutlups.roadmap/2", "runtime", {"python": "3.14", "extra": True}),
+])
+def test_strict_v2_declarations(tmp_path, schema, key, value):
+    data = _base()
+    data.update(schema=schema)
+    data[key] = value
+    path = tmp_path / "roadmap.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(RoadmapError):
+        load(path)

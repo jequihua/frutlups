@@ -1,3 +1,6 @@
+import tomllib
+from pathlib import Path
+
 import pytest
 
 from frutlups import __version__
@@ -5,7 +8,10 @@ from frutlups.cli import main
 
 
 def test_version() -> None:
-    assert __version__ == "0.3.2"
+    assert __version__ == "0.4.1"
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    metadata = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    assert metadata["project"]["version"] == __version__
 
 
 @pytest.mark.parametrize("argv", [[], ["unknown"]])

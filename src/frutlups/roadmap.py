@@ -2,9 +2,10 @@
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+from types import MappingProxyType
 
 import yaml
 
@@ -12,7 +13,7 @@ from ._paths import safe_rel
 
 TOP = {
     "schema", "project", "brief", "verification", "allowed_prefixes", "forbidden",
-    "review", "memory", "milestones", "ruled_out", "not_yet_specified",
+    "review", "memory", "milestones", "ruled_out", "not_yet_specified", "runtime", "autonomy",
 }
 MILESTONE_KEYS = {"id", "title", "status", "risk", "holistic_review", "slices"}
 SLICE_KEYS = {
@@ -60,6 +61,12 @@ class Roadmap:
     memory: Memory | None; milestones: tuple[Milestone, ...]
     ruled_out: tuple[tuple[str, str], ...]
     not_yet_specified: tuple[tuple[str, str], ...]
+    schema: str = "frutlups.roadmap/2"
+    runtime: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    autonomy: Mapping[str, str] | None = None
+    verification_git_boundary: tuple[str, ...] | None = None
+    verification_observation: str = "process"
+    verification_timeout_seconds: int = 600
 
 
 def _map(value: object, allowed: set[str], where: str, errors: list[str]) -> bool:
@@ -112,8 +119,12 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     ids: set[str] = set()
     _map(data, TOP, "roadmap", errors)
-    if data.get("schema") != "frutlups.roadmap/1":
-        errors.append("schema must be frutlups.roadmap/1")
+    if data.get("schema") != "frutlups.roadmap/2":
+        errors.append("unsupported roadmap schema; expected frutlups.roadmap/2; use pinned v4 for legacy projects")
+        return errors, warnings
+    if "autonomy" in data:
+        if data["autonomy"] != {"schema": "frutlups.autonomy/1"}:
+            errors.append("autonomy requires /2 and exactly {schema: frutlups.autonomy/1}")
     if not isinstance(data.get("project"), str) or not data.get("project", "").strip():
         errors.append("project must be a non-empty string")
     try:
@@ -121,11 +132,28 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
     except ValueError as exc:
         errors.append(f"brief: {exc}")
     verification = data.get("verification")
-    if _map(verification, {"full", "focused_default"}, "verification", errors):
+    verification_keys = {"full", "focused_default", "git_boundary", "observation", "timeout_seconds"}
+    if _map(verification, verification_keys, "verification", errors):
         _strings(verification.get("full"), "verification.full argv", errors, required=True)
-        _commands(
-            verification.get("focused_default", []), "verification.focused_default", errors,
-        )
+        _commands(verification.get("focused_default", []), "verification.focused_default", errors)
+        if "git_boundary" in verification:
+            _strings(verification["git_boundary"], "verification.git_boundary", errors, True)
+        if verification.get("observation", "process") not in (
+            "process",
+            "in_process",
+            "fresh_process",
+            "clean_checkout",
+            "inspection",
+        ):
+            errors.append("invalid verification observation")
+        timeout = verification.get("timeout_seconds", 600)
+        if type(timeout) is not int or timeout <= 0:
+            errors.append("verification.timeout_seconds must be a positive integer")
+    if "runtime" in data:
+        runtime = data["runtime"]
+        if _map(runtime, {"python"}, "runtime", errors):
+            if not re.fullmatch(r"3\.\d+(?:\.\d+)?", str(runtime.get("python", ""))):
+                errors.append("runtime.python must name a Python 3 minor or patch version")
     defaults = _paths(data.get("allowed_prefixes"), "allowed_prefixes", errors, True)
     forbidden = _paths(data.get("forbidden"), "forbidden", errors, True)
     review = data.get("review")
@@ -147,7 +175,7 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
             memory_root = memory.get("root", "").rstrip("/") + "/"
         _strings(memory.get("read_verbs"), "memory.read_verbs", errors, True)
         _paths(memory.get("read_first_pages"), "memory.read_first_pages", errors)
-    milestones, active, done = data.get("milestones"), 0, 0
+    milestones = data.get("milestones")
     if not isinstance(milestones, list) or not milestones:
         errors.append("milestones must be a non-empty list")
         milestones = []
@@ -171,8 +199,6 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
         if not isinstance(milestone.get("holistic_review"), bool):
             errors.append(f"{where}.holistic_review must be boolean")
         items = milestone.get("slices")
-        active += milestone.get("status") == "active"
-        done += milestone.get("status") == "done"
         if not isinstance(items, list) or not items:
             errors.append(f"{where}.slices must be non-empty")
             continue
@@ -229,8 +255,6 @@ def _validate(data: dict) -> tuple[list[str], list[str]]:
             _paths(item.get("memory_pages", []), f"{sw}.memory_pages", errors)
             if len(yaml.safe_dump(item, sort_keys=False).encode()) > 2048:
                 warnings.append(f"{sid}: slice entry exceeds 2 KB")
-    if milestones and not active and done != len(milestones):
-        errors.append("at least one milestone must be active unless all milestones are done")
     for key, prefix in (("ruled_out", "R"), ("not_yet_specified", "N")):
         rows = data.get(key, [])
         if not isinstance(rows, list):
@@ -293,6 +317,12 @@ def load(path: Path) -> Roadmap:
         tuple(tuple(command) for command in data["verification"].get("focused_default", [])),
         tuple(data["allowed_prefixes"]), tuple(data["forbidden"]), review, memory_model,
         milestones, horizons("ruled_out"), horizons("not_yet_specified"),
+        schema=data["schema"], runtime=MappingProxyType(dict(data.get("runtime", {}))),
+        autonomy=MappingProxyType(dict(data["autonomy"])) if "autonomy" in data else None,
+        verification_git_boundary=(tuple(data["verification"]["git_boundary"])
+                                   if "git_boundary" in data["verification"] else None),
+        verification_observation=data["verification"].get("observation", "process"),
+        verification_timeout_seconds=data["verification"].get("timeout_seconds", 600),
     )
 
 
@@ -326,6 +356,20 @@ def next_slice(roadmap: Roadmap, state: object) -> Slice | None:
             for item in milestone.slices:
                 if step(item) != "accepted":
                     return item
+    return None
+
+
+def next_milestone(roadmap: Roadmap, state: object) -> Milestone | None:
+    """Autonomous frontier: explicit reopen first, then the earliest active gate."""
+    for milestone in roadmap.milestones:
+        if any(state.slices[item.id].reopened and state.slices[item.id].step != "accepted"
+               for item in milestone.slices):
+            return milestone
+    for milestone in roadmap.milestones:
+        complete = all(state.slices[item.id].step == "accepted" for item in milestone.slices)
+        complete = complete and (not milestone.holistic_review or milestone.id in state.milestones_done)
+        if milestone.status == "active" and not complete:
+            return milestone
     return None
 
 

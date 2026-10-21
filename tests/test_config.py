@@ -4,8 +4,7 @@ from pathlib import Path
 import pytest
 from frutlups.config import Config, ConfigError
 
-PROJECT_ROOT = Path(__file__).parents[3]
-EXAMPLE = PROJECT_ROOT / "frutlups.toml"
+EXAMPLE = Path(__file__).parent / "fixtures" / "v4_project" / "frutlups.toml"
 
 
 def _local_config(tmp_path: Path) -> str:
@@ -89,4 +88,33 @@ def test_refuses_unknown_nested_key(tmp_path: Path) -> None:
     _write_config(tmp_path, main=main)
 
     with pytest.raises(ConfigError, match=r"seats\.coder\.extra"):
+        Config.load(tmp_path)
+
+
+@pytest.mark.parametrize(("table", "mib"), [
+    ("", 2), ("\n[limits]\n", 2), ("\n[limits]\npi_record_mib = 2\n", 2),
+    ("\n[limits]\npi_record_mib = 32\n", 32),
+    ("\n[limits]\npi_record_mib = 8589934591\n", 8589934591),
+])
+def test_pi_record_limit_defaults_and_exact_representation(tmp_path, table, mib):
+    _write_config(tmp_path, EXAMPLE.read_text(encoding="utf-8") + table)
+    cfg = Config.load(tmp_path)
+    assert cfg.pi_record_bytes == mib * 1024 * 1024
+    assert cfg.pi_record_bytes <= 2**53 - 1
+
+
+@pytest.mark.parametrize("table", [
+    "[limits]\npi_record_mib = true", "[limits]\npi_record_mib = 0",
+    "[limits]\npi_record_mib = -1", "[limits]\npi_record_mib = 1.5",
+    '[limits]\npi_record_mib = "32"', "[limits]\npi_record_mib = 8589934592",
+    "[limits]\nextra = 1", 'limits = "32"',
+])
+def test_invalid_pi_record_limit_refuses_before_dispatch(tmp_path, table):
+    main = EXAMPLE.read_text(encoding="utf-8")
+    if table.startswith("limits ="):
+        main = main.replace('schema = "frutlups/1"', 'schema = "frutlups/1"\n' + table)
+    else:
+        main += "\n" + table + "\n"
+    _write_config(tmp_path, main)
+    with pytest.raises(ConfigError, match="limits"):
         Config.load(tmp_path)

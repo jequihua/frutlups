@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "frutlups"
-version = "0.3.2"
+version = "0.4.1"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0.3,<7"]
 
@@ -13,6 +13,9 @@ frutlups = "frutlups.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"frutlups.seats" = ["pi_delegate/index.ts"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -1,0 +1,438 @@
+{
+  "domain": "Exact expected native issuance values for later M4-S2 pair tests; no runner execution",
+  "schema": "frutlups.envelope/2",
+  "slice": "M001-S01",
+  "fields": [
+    "title",
+    "objective",
+    "acceptance",
+    "non_goals",
+    "read_first",
+    "allowed_prefixes",
+    "forbidden",
+    "focused",
+    "full",
+    "runtime",
+    "timeout_seconds",
+    "observation",
+    "notes",
+    "memory"
+  ],
+  "contracts": {
+    "v1": {
+      "title": "Contract 1",
+      "objective": "Deliver contract 1.",
+      "acceptance": [
+        "Retain both original products.",
+        "Check correction 1."
+      ],
+      "non_goals": [
+        "Excluded work 1"
+      ],
+      "read_first": [
+        "README.md"
+      ],
+      "allowed_prefixes": [
+        "07_app/a.py",
+        "07_app/b.py"
+      ],
+      "forbidden": [
+        "00_brief/",
+        "private1/"
+      ],
+      "focused": [
+        [
+          "python",
+          "-c",
+          "print('focused-1')"
+        ]
+      ],
+      "full": [
+        "python",
+        "-c",
+        "print('full-1')"
+      ],
+      "runtime": {
+        "python": "3.14"
+      },
+      "timeout_seconds": 21,
+      "observation": "process",
+      "notes": "Save contract_1_notes.md",
+      "memory": "Root: `memory/llloom`\n\nAllowed read commands:\n- `llloom --root memory/llloom search`\n\nRead for this slice:\n- `page1.md`\n\nCite claim or page ids used. Report stale or contradicted claims; do not hand-edit memory."
+    },
+    "v2": {
+      "title": "Contract 2",
+      "objective": "Deliver contract 2.",
+      "acceptance": [
+        "Retain both original products.",
+        "Check correction 2."
+      ],
+      "non_goals": [
+        "Excluded work 2"
+      ],
+      "read_first": [
+        "docs/operating.md"
+      ],
+      "allowed_prefixes": [
+        "07_app/a.py"
+      ],
+      "forbidden": [
+        "00_brief/",
+        "private2/"
+      ],
+      "focused": [
+        [
+          "python",
+          "-c",
+          "print('focused-2')"
+        ]
+      ],
+      "full": [
+        "python",
+        "-c",
+        "print('full-2')"
+      ],
+      "runtime": {
+        "python": "3.14.3"
+      },
+      "timeout_seconds": 22,
+      "observation": "fresh_process",
+      "notes": "Save contract_2_notes.md",
+      "memory": "Root: `memory/llloom`\n\nAllowed read commands:\n- `llloom --root memory/llloom search`\n\nRead for this slice:\n- `page2.md`\n\nCite claim or page ids used. Report stale or contradicted claims; do not hand-edit memory."
+    },
+    "v3": {
+      "title": "Contract 3",
+      "objective": "Deliver contract 3.",
+      "acceptance": [
+        "Retain both original products.",
+        "Check correction 3."
+      ],
+      "non_goals": [
+        "Excluded work 3"
+      ],
+      "read_first": [
+        "docs/operating.md"
+      ],
+      "allowed_prefixes": [
+        "07_app/a.py"
+      ],
+      "forbidden": [
+        "00_brief/",
+        "private3/"
+      ],
+      "focused": [
+        [
+          "python",
+          "-c",
+          "print('focused-3')"
+        ]
+      ],
+      "full": [
+        "python",
+        "-c",
+        "print('full-3')"
+      ],
+      "runtime": {
+        "python": "3.14.3"
+      },
+      "timeout_seconds": 23,
+      "observation": "fresh_process",
+      "notes": "Save contract_3_notes.md",
+      "memory": "Root: `memory/llloom`\n\nAllowed read commands:\n- `llloom --root memory/llloom search`\n\nRead for this slice:\n- `page3.md`\n\nCite claim or page ids used. Report stale or contradicted claims; do not hand-edit memory."
+    },
+    "v1_failure": {
+      "title": "Contract 1",
+      "objective": "Deliver contract 1.",
+      "acceptance": [
+        "Retain both original products.",
+        "Check correction 1."
+      ],
+      "non_goals": [
+        "Excluded work 1"
+      ],
+      "read_first": [
+        "README.md"
+      ],
+      "allowed_prefixes": [
+        "07_app/a.py",
+        "07_app/b.py"
+      ],
+      "forbidden": [
+        "00_brief/",
+        "private1/"
+      ],
+      "focused": [
+        [
+          "python",
+          "-c",
+          "print('focused-1')"
+        ]
+      ],
+      "full": [
+        "python",
+        "-c",
+        "raise SystemExit(7)"
+      ],
+      "runtime": {
+        "python": "3.14"
+      },
+      "timeout_seconds": 21,
+      "observation": "process",
+      "notes": "Save contract_1_notes.md",
+      "memory": "Root: `memory/llloom`\n\nAllowed read commands:\n- `llloom --root memory/llloom search`\n\nRead for this slice:\n- `page1.md`\n\nCite claim or page ids used. Report stale or contradicted claims; do not hand-edit memory."
+    }
+  },
+  "cases": [
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "authority",
+      "transition": "needs_work",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "environment",
+      "transition": "verification_failure",
+      "initial": {
+        "round": 1,
+        "task": "v1_failure"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1_failure"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "reviewer",
+      "transition": "needs_work",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "authority",
+      "transition": "reopen",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "authority",
+      "transition": "holistic",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": "authority",
+      "transition": "cancel",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": {
+        "round": 2,
+        "admitted_roadmap": "v2",
+        "task": "v1"
+      },
+      "correction": {
+        "round": 3,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_resolved_continuation_then_each_legal_new_issuance",
+      "route": null,
+      "transition": "needs_work",
+      "initial": {
+        "round": 1,
+        "task": "v1"
+      },
+      "continuation": null,
+      "correction": {
+        "round": 2,
+        "admitted_roadmap": "v3",
+        "task": "v3"
+      }
+    },
+    {
+      "test": "test_repeated_blockers_cross_scope_and_neutral_events_with_custom_backends",
+      "custom": false,
+      "backend": "manual",
+      "rounds": [
+        {
+          "round": 1,
+          "task": "v1"
+        },
+        {
+          "round": 2,
+          "task": "v1",
+          "admitted_roadmap": "v2"
+        },
+        {
+          "round": 3,
+          "task": "v2"
+        },
+        {
+          "round": 4,
+          "task": "v2",
+          "admitted_roadmap": "v3"
+        }
+      ]
+    },
+    {
+      "test": "test_repeated_blockers_cross_scope_and_neutral_events_with_custom_backends",
+      "custom": false,
+      "backend": "autonomous",
+      "rounds": [
+        {
+          "round": 1,
+          "task": "v1"
+        },
+        {
+          "round": 2,
+          "task": "v1",
+          "admitted_roadmap": "v2"
+        },
+        {
+          "round": 3,
+          "task": "v2"
+        },
+        {
+          "round": 4,
+          "task": "v2",
+          "admitted_roadmap": "v3"
+        }
+      ]
+    },
+    {
+      "test": "test_repeated_blockers_cross_scope_and_neutral_events_with_custom_backends",
+      "custom": true,
+      "backend": "manual",
+      "rounds": [
+        {
+          "round": 1,
+          "task": "v1"
+        },
+        {
+          "round": 2,
+          "task": "v1",
+          "admitted_roadmap": "v2"
+        },
+        {
+          "round": 3,
+          "task": "v2"
+        },
+        {
+          "round": 4,
+          "task": "v2",
+          "admitted_roadmap": "v3"
+        }
+      ]
+    },
+    {
+      "test": "test_repeated_blockers_cross_scope_and_neutral_events_with_custom_backends",
+      "custom": true,
+      "backend": "autonomous",
+      "rounds": [
+        {
+          "round": 1,
+          "task": "v1"
+        },
+        {
+          "round": 2,
+          "task": "v1",
+          "admitted_roadmap": "v2"
+        },
+        {
+          "round": 3,
+          "task": "v2"
+        },
+        {
+          "round": 4,
+          "task": "v2",
+          "admitted_roadmap": "v3"
+        }
+      ]
+    }
+  ],
+  "narrowed_consumer_case": {
+    "test": "test_narrowed_coded_refusal_cumulative_manifest_and_frozen_consumers",
+    "issued_round": 3,
+    "task": "v2",
+    "later_roadmap": "v3 with a.py and b.py allowed",
+    "expected_coded_refusal": "write boundary violation: 07_app/b.py",
+    "cumulative_paths": [
+      {
+        "path": "07_app/a.py",
+        "round": 3
+      },
+      {
+        "path": "07_app/b.py",
+        "round": 1
+      }
+    ],
+    "current_paths": [
+      "07_app/a.py"
+    ]
+  },
+  "evidence": "selector_final.json; regression_matrix.md",
+  "runtime_binding": "Exact task runtime values above reflect CPython 3.14.3 used for this qualification."
+}

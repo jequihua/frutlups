@@ -22,13 +22,23 @@ from frutlups.ledger import (
 )
 from frutlups.roadmap import load, next_slice
 
-FIXTURE = Path(__file__).parent / "fixtures" / "v4_project"
+FIXTURE = Path(__file__).parent / "fixtures" / "v5_development"
 STAMP = "2026-09-03T10:00:00Z"
 DIGEST = "0" * 64
 
 
 def _event(ev: str, *, by: str = "architect", **data: object) -> dict:
-    return {"schema": "frutlups.ledger/1", "t": STAMP, "ev": ev, "by": by, **data}
+    if ev == "prompt":
+        data = {"envelope": {"path": "envelope.json", "sha": DIGEST}, **data}
+    elif ev == "coded":
+        data = {"manifest": {"path": "manifest.json", "sha": DIGEST}, "result": "implemented", **data}
+        if "notes_path" in data:
+            data["notes_sha"] = DIGEST
+    elif ev == "unblocked":
+        ev = "resolved"
+        data.pop("round", None)
+        data = {"scope": data.pop("slice"), "authority": [{"path": "decision.md", "sha": DIGEST}], **data}
+    return {"schema": "frutlups.ledger/2", "t": STAMP, "ev": ev, "by": by, **data}
 
 
 def _prompt(round_no: int = 1) -> dict:
@@ -140,17 +150,19 @@ def test_fold_table_rows(
     current = state.slices["M001-S01"]
     assert current.step == step
     assert current.round == round_no
-    if events and events[-1]["ev"] == "unblocked":
+    if events and events[-1]["ev"] == "resolved":
         assert current.open_findings == ("F1",)
-        assert current.unblock_reason == "approved"
+        assert current.resolution == "approved"
     if events and events[-1]["ev"] == "reopened":
         assert current.reopened is True
 
 
-def test_all_eleven_event_types_are_declared() -> None:
+def test_legacy_and_v2_event_types_are_declared() -> None:
     assert {event.value for event in Ev} == {
         "prompt", "artifact", "coded", "verified", "reviewed", "accepted",
-        "reopened", "unblocked", "milestone_done", "note", "stop",
+        "reopened", "milestone_done", "note", "stop",
+        "resolved", "commit_cancelled", "holistic_reviewed", "review_checkpoint",
+        "attempt_started", "attempt_finished", "run_admitted", "run_extended",
     }
 
 
@@ -173,7 +185,7 @@ def test_cost_refuses_invalid_numeric_values(tmp_path, kind, cost):
     event = _coded(cost_usd=cost) if kind == "coded" else {**_reviewed("pass"), "cost_usd": cost}
     with pytest.raises(LedgerError) as caught:
         _parsed(tmp_path, [event])
-    assert str(caught.value) == "line 1: invalid text, usage, or actor field"
+    assert str(caught.value) == "line 1: event: invalid text, usage, or actor field"
 
 
 @pytest.mark.parametrize(
@@ -207,7 +219,9 @@ def test_next_slice_matches_template_on_same_ledger(
         {**event, "slice": f"M{index:03}-S01"}
         for index in accepted for event in _accepted_events()
     ]
-    events += [_event("milestone_done", milestone=f"M{index:03}") for index in done]
+    events += [row for index in done for row in (
+        _event("holistic_reviewed", milestone=f"M{index:03}", report="holistic.md", sha=DIGEST, verdict="pass", open=[]),
+        _event("milestone_done", milestone=f"M{index:03}", holistic_report="holistic.md"))]
     events += [
         _event("reopened", slice=f"M{index:03}-S01", round=2, reason="holistic finding")
         for index in reopened
@@ -235,14 +249,19 @@ def test_next_slice_matches_template_on_same_ledger(
         result = subprocess.run(args, capture_output=True, text=True, check=False)
         assert result.returncode == 0, result.stderr
         assert result.stderr == ""
-        assert result.stdout == output
+        template_suffix = ""
+        if script == "ledger.py":
+            template_suffix += "".join(f"M{index:03} holistic: done\n" for index in done)
+            template_suffix += "".join(f"warning: M{index:03} declared done without ledger closure\n"
+                                       for index, status in enumerate(statuses, 1) if status == "done" and index not in done)
+        assert result.stdout == output + template_suffix
 
 
 @pytest.mark.parametrize(
     ("line", "message"),
     [
         ("{", "line 1: malformed JSON"),
-        (json.dumps(_event("note", text="ok", extra=True)), "line 1: unknown"),
+        (json.dumps(_event("note", text="ok", extra=True)), "line 1: event: unknown"),
         (json.dumps({**_event("note", text="ok"), "schema": "bad"}), "line 1: invalid schema"),
     ],
     ids=("malformed", "unknown-field", "bad-schema"),
@@ -263,6 +282,8 @@ def test_append_folds_before_write_and_preserves_bytes_on_refusal(tmp_path: Path
     candidate = _parsed(tmp_path / "candidate", [_accepted()])[0]
 
     with pytest.raises(LedgerError, match="accepted out of order"):
+        fold((*read(path), candidate), roadmap)
+    with pytest.raises(LedgerError, match="/2 ledger append is not enabled"):
         append(path, candidate, roadmap)
 
     assert path.read_bytes() == before
@@ -275,7 +296,7 @@ def test_append_writes_lf_and_fsyncs(tmp_path: Path, monkeypatch: pytest.MonkeyP
     calls = []
     monkeypatch.setattr(ledger_module.os, "fsync", calls.append)
 
-    append(path, candidate, roadmap)
+    ledger_module._write_line(path, ledger_module._event_dict(candidate))
 
     assert calls
     assert path.read_bytes().endswith(b"\n")
@@ -289,9 +310,9 @@ def test_append_loads_adjacent_roadmap_by_default(tmp_path: Path) -> None:
     path = root / "05_governance" / "ledger.jsonl"
     candidate = _parsed(tmp_path / "candidate", [_prompt()])[0]
 
-    append(path, candidate)
-
-    assert read(path) == (candidate,)
+    with pytest.raises(LedgerError, match="/2 ledger append is not enabled"):
+        append(path, candidate)
+    assert not path.exists()
 
 
 @pytest.mark.parametrize(
@@ -344,6 +365,7 @@ def test_holistic_artifacts_and_milestone_done_after_acceptance(tmp_path: Path) 
             "artifact", by="human", scope="M001", round="holistic",
             role="holistic_report", path="holistic-report.md", sha=DIGEST,
         ),
+        _event("holistic_reviewed", milestone="M001", report="holistic-report.md", sha=DIGEST, verdict="pass", open=[]),
         _event("milestone_done", milestone="M001", holistic_report="holistic-report.md"),
     ]
 
@@ -489,7 +511,7 @@ def test_check_accepts_crlf_working_copy_of_lf_blob_like_template(
     prompt = root / "prompt.md"
     prompt.write_bytes(b"implement\n")
     path = root / "05_governance" / "ledger.jsonl"
-    _write(path, [
+    rows = [
         {**_prompt(), "sha": hashlib.sha256(prompt.read_bytes()).hexdigest()},
         _event(
             "coded", slice="M001-S01", round=1,
@@ -498,7 +520,19 @@ def test_check_accepts_crlf_working_copy_of_lf_blob_like_template(
                 "kind": "modified",
             }],
         ),
-    ])
+    ]
+
+    from frutlups import render
+    model = load(root / "roadmap.yaml")
+    item = model.milestones[0].slices[0]
+    envelope = render.coding_envelope(root, model, item, fold((), model).slices[item.id])
+    envelope["allowed_prefixes"] = ["product.txt"]
+    manifest = dict(schema="frutlups.manifest/2", slice=item.id, round=1, changed=[dict(row, round=1) for row in rows[1]["changed"]])
+    for row, key, content in ((rows[0], "envelope", envelope), (rows[1], "manifest", manifest)):
+        raw = json.dumps(content).encode()
+        (root / row[key]["path"]).write_bytes(raw)
+        row[key]["sha"] = evidence_sha(raw)
+    _write(path, rows)
 
     assert check(path, root) == ()
     result = subprocess.run(

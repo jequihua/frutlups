@@ -1,0 +1,3189 @@
+{
+  "kind": "final same-commit distribution export and corpora; not development source",
+  "root": "v5_final",
+  "project": "v5_final/project",
+  "commit": "711bce067eb0b3d05abf8cdec54f3cc812f62a5d",
+  "F_base_commit": "ae14bf4a52a021e8f5bc9ea50b85d36b98b0d55a",
+  "release_acceptance": "T M004-S01 round 1 accepted 2026-10-03T15:08:25Z; F adoption pending S07 review",
+  "provenance": {
+    "intake": {
+      "path": "02_analysis/m008_s07_admission/r1/intake.json",
+      "bytes": 130724,
+      "raw_sha256": "98fbeee684e5d7c4f235bbe7bc441203d94b86e4f313a78193302dd520bc2495"
+    },
+    "committed_bundle": {
+      "path": "02_analysis/m008_s07_admission/r1/T_committed_bundle.json",
+      "bytes": 17697,
+      "raw_sha256": "513adcc68dd7a69b6cb96af0f488398f422d069bf15b53c67596ed9a2acd0f83"
+    },
+    "acceptance_manifest": {
+      "path": "04_delivery/maintenance/m004/M004-S01_acceptance_r1/packet_manifest.json",
+      "bytes": 49709,
+      "raw_sha256": "ab1fe4bd27cf329a2858dff4d934b13a8c719e78aa1bed92e129567bd9c8d0a9",
+      "repository": "T"
+    },
+    "tree_listing_sha256": "fe039df7a7613ba94c3110e4955132800f5d5814d608f9ce78ed85c6575722c0"
+  },
+  "archive": {
+    "path": "v5_final/template-5.0.0.tar",
+    "bytes": 460800,
+    "raw_sha256": "a8d3764d87804e0ae9b880f02a4f53592e553dc53c2d24d51b22d6a7bf4ec04a",
+    "pax_comment": "711bce067eb0b3d05abf8cdec54f3cc812f62a5d",
+    "regular_files": 69,
+    "regular_file_bytes": 389077,
+    "directories": [
+      "00_brief",
+      "01_data",
+      "02_analysis",
+      "03_experiments",
+      "04_delivery",
+      "05_governance",
+      "05_governance/human_owner_notes",
+      "05_governance/reviews",
+      "06_infra",
+      "07_app",
+      "08_pkg",
+      "09_ops",
+      "docs",
+      "initialization",
+      "local_state",
+      "prompts",
+      "prompts/for_coding_agent",
+      "prompts/for_review_agent",
+      "prompts/templates",
+      "questions",
+      "questions/answered",
+      "questions/open",
+      "scripts"
+    ],
+    "directory_tar_mode": "0775"
+  },
+  "members": [
+    {
+      "path": ".editorconfig",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 299,
+      "raw_sha256": "479aaddb60872e7c9015e91ae1fa2c996ed933a99017176d13add75025ea011f"
+    },
+    {
+      "path": ".gitattributes",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 266,
+      "raw_sha256": "a4be68cc7f5e6d60b09e10a6414dd0b579b0d0eeadffec35a15034faab36f7af"
+    },
+    {
+      "path": ".gitignore",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 760,
+      "raw_sha256": "3c9e7046848727341d6ac3fd1722bde318ea59aec29cb9fd739e05407c8fd9b7"
+    },
+    {
+      "path": "00_brief/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 179,
+      "raw_sha256": "b93223b76c3d6576b487414904aa90fa5841e9473550aa3c923308b1f90f0f92"
+    },
+    {
+      "path": "00_brief/constraints.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 180,
+      "raw_sha256": "a09ecfa9db6133d8ece28e3625ed3856fa14c28c238bc0a39ba8be9d60c1a390"
+    },
+    {
+      "path": "00_brief/decisions.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 397,
+      "raw_sha256": "0a50292f911553bb152f84bc4220c21c3ba151d8d53c0e79e7e7e470dedb257b"
+    },
+    {
+      "path": "00_brief/intake.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 1096,
+      "raw_sha256": "c9c462d5ebcb0ac2ac5f1002f42d3397edb9a2030fd925c18a2698640ea7e4fe"
+    },
+    {
+      "path": "01_data/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 151,
+      "raw_sha256": "249945feb03f8e3d0bc2d70ca1461446d33f4fa698e24e5f49f30a74c48fa9b4"
+    },
+    {
+      "path": "02_analysis/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 146,
+      "raw_sha256": "24efbfa7addb54a82b8f1f838ae1f5bc63b415a97d479ed7665da84cec10ce48"
+    },
+    {
+      "path": "03_experiments/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 148,
+      "raw_sha256": "94d31273235353410b2f0bea419c5c9ba2e42c4ad8adcc0756d3407cb9616636"
+    },
+    {
+      "path": "04_delivery/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 152,
+      "raw_sha256": "b34626f55e43bc4630b92e8c4f073326b887acd7e3e989f44fcceb7bd898ea45"
+    },
+    {
+      "path": "05_governance/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 272,
+      "raw_sha256": "3f75c14121dce853ad9a27deb005c7f799dcbea570ea3f2f93711dcde93b334f"
+    },
+    {
+      "path": "05_governance/backlog.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 162,
+      "raw_sha256": "4bc37c4ef269ed360960c7f6a00e7ece1dae53ba3cb80a0a9521d15815ae041c"
+    },
+    {
+      "path": "05_governance/human_owner_notes/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 175,
+      "raw_sha256": "b59b5c756fb7234363aaa13b804dff1945a52ef9d25ef95a659732c76a9f1763"
+    },
+    {
+      "path": "05_governance/ledger.jsonl",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 0,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "05_governance/reviews/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 198,
+      "raw_sha256": "677a5baa249f8131e1de9aa06b56cbffeb1df635e4291fe296d9fac50190749e"
+    },
+    {
+      "path": "06_infra/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 175,
+      "raw_sha256": "20e3b8e1142b2c02bedb3b1e20b1920c0676d7e55dc9e3fe4fe4e6e052758acd"
+    },
+    {
+      "path": "07_app/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 147,
+      "raw_sha256": "ad4fc98fecd76970f19392bb8b21aa76005f7afdfbde1eca827b672f63da4938"
+    },
+    {
+      "path": "08_pkg/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 149,
+      "raw_sha256": "1e5762dfce4826221c7cb6e9e3b9beabbcb50b8d823fc60658d7235512b58b5a"
+    },
+    {
+      "path": "09_ops/CONTEXT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 157,
+      "raw_sha256": "06b1f1da1b7d5c76789ca945b5568243ac0e055bf209969396fbeb217083eb6e"
+    },
+    {
+      "path": "AGENTS.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 7927,
+      "raw_sha256": "1cf814fdc6c46b9324240d23c273ad604d33cbe2163ab9b3011063e5ecc48759"
+    },
+    {
+      "path": "CLAUDE.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 11,
+      "raw_sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    {
+      "path": "ENVIRONMENT.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 2239,
+      "raw_sha256": "d5afba45edc71e3afe7b83fe8d2651c611e0d9e1ff39ca7ba1a9200939962125"
+    },
+    {
+      "path": "README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 3785,
+      "raw_sha256": "78c6484dcda98b80cb8057f005d1b8411e62843c6dcc7bcea6308919afa1a7e0"
+    },
+    {
+      "path": "docs/autonomy.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 11947,
+      "raw_sha256": "78a820adb7cdcc0f91e23d7a37bb412118a48f2850e84dd4a903bf7643374aed"
+    },
+    {
+      "path": "docs/contracts.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 15312,
+      "raw_sha256": "a0820f0fc83fd7dc566a53bbfeec5b89fffaa27ceb8496c27d99b16ee683f65b"
+    },
+    {
+      "path": "docs/front_repo.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 3364,
+      "raw_sha256": "75c27e75d0fab85fe836d03cee43c6969ad618b86f0d58fb888d28fb6cea3fe9"
+    },
+    {
+      "path": "docs/glossary.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 4128,
+      "raw_sha256": "3f4a9963cfd47ac1104b6bc0d8af6e7f4613d9b7d8afe521fef4a5e3f9c9f6e9"
+    },
+    {
+      "path": "docs/ledger.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 6570,
+      "raw_sha256": "21d04f739612beb41c139d7734763e9d7390067aa9b1342c4eccc47c97de341c"
+    },
+    {
+      "path": "docs/memory.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 1733,
+      "raw_sha256": "10cdb36a1f4076733a518f00dcf05a842db8a03d31e58ac6367cae7f213575df"
+    },
+    {
+      "path": "docs/method.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 10764,
+      "raw_sha256": "3b288362026c0555bb6031eeef424067615471c9ed7c341616bb10f3e52859a6"
+    },
+    {
+      "path": "docs/operating.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 11703,
+      "raw_sha256": "c06e1d53ac5e29e5b7f425ccad14ada6c355bed6912c33238a0ab336f0d63d28"
+    },
+    {
+      "path": "docs/project_checks.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 6904,
+      "raw_sha256": "7a082b6e9ff2cce2552a576469518f277e2d697521635573114c5c78c6548779"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 445,
+      "raw_sha256": "9f96a371393d3be3bcc855c7691dda45df29109313c27ada5b8469371da23102"
+    },
+    {
+      "path": "docs/upgrading.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 8700,
+      "raw_sha256": "d67c454d043c3a4c2d2e8535937cb1f0fc88ac7fbff64920454669c57279c0de"
+    },
+    {
+      "path": "docs/walkthrough.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 12793,
+      "raw_sha256": "072fe9cafaaa1360f5455b7aa13fe3825e6dc8c8e8c082dfb14228ac6e3899e3"
+    },
+    {
+      "path": "front_repo.toml",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 576,
+      "raw_sha256": "a4e76a96e7d2a233b394c60c2f343ab8476508e5132e96227aeb329d7a243efb"
+    },
+    {
+      "path": "frutlups.toml",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 870,
+      "raw_sha256": "ed85ae432c13bd2cdcc3cbd41ed0d67e8c909b841862e295458011c2db203b02"
+    },
+    {
+      "path": "initialization/architect.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 1894,
+      "raw_sha256": "060c2debf4279832f4c9411ea9fdc0c3520771793b03891407ff6a97e2708ad8"
+    },
+    {
+      "path": "initialization/coder.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 467,
+      "raw_sha256": "4132546efb9365d00f9c37d07d44e5aee7251957c8f029a1fc9edb7d2dfd732b"
+    },
+    {
+      "path": "initialization/memory_llloom.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 824,
+      "raw_sha256": "f682161b5586ad160609fc0f080fe0674c2270bce5e3598509bc51a294c6d5dd"
+    },
+    {
+      "path": "initialization/reviewer.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 637,
+      "raw_sha256": "8a7636924dd39472549156fdfa7b99670da0b433f98e4a3789f7d68cba6a18c8"
+    },
+    {
+      "path": "local_state/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 210,
+      "raw_sha256": "e99da4635aac42a3ba61ef01c41e771c6362a4513bd046e2660c9846708b35c8"
+    },
+    {
+      "path": "prompts/for_coding_agent/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 143,
+      "raw_sha256": "cba2357afdf557a6735ce9b2d76034229bdf004a128d27504924aea5a57b40d3"
+    },
+    {
+      "path": "prompts/for_review_agent/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 157,
+      "raw_sha256": "3f5617bb23233dbb36a8b58d6b76042cf689c0d94da88dfb65830c2a0fdafbf5"
+    },
+    {
+      "path": "prompts/templates/coding_prompt.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 1126,
+      "raw_sha256": "69c11f9f586574c77a6ae311d6d9c64b3486557b01c712853999c4a766557167"
+    },
+    {
+      "path": "prompts/templates/review_prompt.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 2114,
+      "raw_sha256": "cfeba50d525de5b3777b6d157dea7fedea24db0e7a94bf9ac933fed138f5e075"
+    },
+    {
+      "path": "pyproject.toml",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 432,
+      "raw_sha256": "e467c7615c540abcc037bfc4a08427e5ccbe36a8b5afddfa080877c25c79a059"
+    },
+    {
+      "path": "questions/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 281,
+      "raw_sha256": "d8c137abd16e76d52b72415a50174a4bfcb72d7214528596513ad13fc96c25f7"
+    },
+    {
+      "path": "questions/answered/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 89,
+      "raw_sha256": "758a150c9439a094404a98a40fb1f6d64a202c9022660de8453be9ffcd080642"
+    },
+    {
+      "path": "questions/open/README.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 58,
+      "raw_sha256": "8f24cb92abeb7042d91a5b3311a40b0ecd689e4a374d84613ec8d41e6ff7c03a"
+    },
+    {
+      "path": "questions/template_question.md",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 298,
+      "raw_sha256": "ac38151aa1ec36143a53cd86e0898da60414d2012b319acc5b1ccaa397bb62e5"
+    },
+    {
+      "path": "roadmap.yaml",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 1049,
+      "raw_sha256": "172c4027eab2a3bea46813cf3dab04b51a5c39a978f5df89e03b96f3bf6b6a3f"
+    },
+    {
+      "path": "scripts/_autonomy.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 15774,
+      "raw_sha256": "e72c7129e7950ffa842b67956c373329556d6fa5e604e737c6dbc888e6712750"
+    },
+    {
+      "path": "scripts/_commit.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 26651,
+      "raw_sha256": "ae1531b6712c335de83cc69b1338f2931154749a96c31e2d4d69d9e01c6d8a7e"
+    },
+    {
+      "path": "scripts/_common.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 8879,
+      "raw_sha256": "c456b634ab92ad953591955a3f653eef13125d35248d1392de43666b2a27a144"
+    },
+    {
+      "path": "scripts/_evidence.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 20533,
+      "raw_sha256": "2504fc287ab0ebda7c54d9b96090c493011ff4a7320eb0f7cf931512269c0c45"
+    },
+    {
+      "path": "scripts/_findings.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 10522,
+      "raw_sha256": "69d97583c0d417e03ea539dc34328adfb84bd4df5863e7ddbcb5144393e3f356"
+    },
+    {
+      "path": "scripts/_git.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 9285,
+      "raw_sha256": "50e076471c997de64483cf3d95c5587adc9245246634369704a78ad2fb9bd9fb"
+    },
+    {
+      "path": "scripts/_integrity.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 15618,
+      "raw_sha256": "8b2a35aeaf7497be87da06f31954e4253d0c323e28957c41d5b74c3ad7b28fa3"
+    },
+    {
+      "path": "scripts/_process.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 8762,
+      "raw_sha256": "cbee0b6a1cbf049f8c748e2386b56aa8ebe883a53ffbc83269dffcdc0e514d4f"
+    },
+    {
+      "path": "scripts/_protocol.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 21385,
+      "raw_sha256": "da76f7002e64c45d1b690a8eac5ce6b39f41cd83a7c9313fda95476f2fd7c906"
+    },
+    {
+      "path": "scripts/_workspace.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 5828,
+      "raw_sha256": "8c172a11610aceeeb7c2ce72350adea9fd5b4e6061eb1325ec296cfb709c8d80"
+    },
+    {
+      "path": "scripts/front_repo.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 18683,
+      "raw_sha256": "fdaecc21d7083a63bfe69738543d50f2472c6697566826d6e1027f20546808fd"
+    },
+    {
+      "path": "scripts/hermetic_verification.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 4008,
+      "raw_sha256": "f1c447115fd672851e99adcaae918a570f38707186cb7d699978996832bcf22f"
+    },
+    {
+      "path": "scripts/ledger.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 42344,
+      "raw_sha256": "d5016e29abfb83054fd5c142a48812d659f9d931339d5dafd93f247183a48f58"
+    },
+    {
+      "path": "scripts/prompt.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 34757,
+      "raw_sha256": "12b5c793a7b94bfa80c43dd755f8a87200d6afa5330ab120f09194ce725dbf50"
+    },
+    {
+      "path": "scripts/roadmap.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 13738,
+      "raw_sha256": "b98285db1897d5db376dcacd2ee0b18deffc8ddf1acf953ecf4cae3377d537c3"
+    },
+    {
+      "path": "scripts/verify.py",
+      "tar_mode": "0664",
+      "git_mode": "100644",
+      "bytes": 7551,
+      "raw_sha256": "7c7523afbd593cbaa06f5294c649cc5856fd88d3eef7be9daad51b37439838e1"
+    }
+  ],
+  "corpora": [
+    {
+      "path": "protocol_v2.json",
+      "source_path": "tests/fixtures/protocol_v2.json",
+      "schema": "template.conformance/3",
+      "bytes": 25323,
+      "raw_sha256": "59a19d634ccfbd8d8c37616196cb59974b06310b168810e6ba71fda3b8a39891",
+      "cases": 16,
+      "archive_member": false,
+      "identical_to_development": "v5_development/tests/fixtures/protocol_v2.json"
+    },
+    {
+      "path": "autonomy_v1.json",
+      "source_path": "tests/fixtures/autonomy_v1.json",
+      "schema": "template.autonomy-conformance/2",
+      "bytes": 343766,
+      "raw_sha256": "ca8d6a2b159bb3f468ce725ab0645cd6153338bdb70a19f58027ab16a1c63150",
+      "cases": 134,
+      "archive_member": false,
+      "identical_to_development": "v5_development/tests/fixtures/autonomy_v1.json"
+    }
+  ],
+  "membership": {
+    "distribution": 69,
+    "source": 85,
+    "development": 83,
+    "development_commit": "bc4e9d1290119f54ec62d9e231826a68c2eea34c",
+    "source_only": [
+      "tests/fixtures/autonomy_v1.json",
+      "tests/fixtures/protocol_v2.json",
+      "tests/test_autonomy.py",
+      "tests/test_commit_review.py",
+      "tests/test_commit_v2.py",
+      "tests/test_findings_remediation.py",
+      "tests/test_integrity_v2.py",
+      "tests/test_process_review.py",
+      "tests/test_project_checks.py",
+      "tests/test_prompt_dependability.py",
+      "tests/test_prompts_v2.py",
+      "tests/test_protocol_v2.py",
+      "tests/test_remediation.py",
+      "tests/test_review_protocol.py",
+      "tests/test_scaffold.py",
+      "tests/test_verification_v2.py"
+    ],
+    "source_files": [
+      {
+        "path": ".editorconfig",
+        "bytes": 299,
+        "raw_sha256": "479aaddb60872e7c9015e91ae1fa2c996ed933a99017176d13add75025ea011f"
+      },
+      {
+        "path": ".gitattributes",
+        "bytes": 266,
+        "raw_sha256": "a4be68cc7f5e6d60b09e10a6414dd0b579b0d0eeadffec35a15034faab36f7af"
+      },
+      {
+        "path": ".gitignore",
+        "bytes": 760,
+        "raw_sha256": "3c9e7046848727341d6ac3fd1722bde318ea59aec29cb9fd739e05407c8fd9b7"
+      },
+      {
+        "path": "00_brief/CONTEXT.md",
+        "bytes": 179,
+        "raw_sha256": "b93223b76c3d6576b487414904aa90fa5841e9473550aa3c923308b1f90f0f92"
+      },
+      {
+        "path": "00_brief/constraints.md",
+        "bytes": 180,
+        "raw_sha256": "a09ecfa9db6133d8ece28e3625ed3856fa14c28c238bc0a39ba8be9d60c1a390"
+      },
+      {
+        "path": "00_brief/decisions.md",
+        "bytes": 397,
+        "raw_sha256": "0a50292f911553bb152f84bc4220c21c3ba151d8d53c0e79e7e7e470dedb257b"
+      },
+      {
+        "path": "00_brief/intake.md",
+        "bytes": 1096,
+        "raw_sha256": "c9c462d5ebcb0ac2ac5f1002f42d3397edb9a2030fd925c18a2698640ea7e4fe"
+      },
+      {
+        "path": "01_data/CONTEXT.md",
+        "bytes": 151,
+        "raw_sha256": "249945feb03f8e3d0bc2d70ca1461446d33f4fa698e24e5f49f30a74c48fa9b4"
+      },
+      {
+        "path": "02_analysis/CONTEXT.md",
+        "bytes": 146,
+        "raw_sha256": "24efbfa7addb54a82b8f1f838ae1f5bc63b415a97d479ed7665da84cec10ce48"
+      },
+      {
+        "path": "03_experiments/CONTEXT.md",
+        "bytes": 148,
+        "raw_sha256": "94d31273235353410b2f0bea419c5c9ba2e42c4ad8adcc0756d3407cb9616636"
+      },
+      {
+        "path": "04_delivery/CONTEXT.md",
+        "bytes": 152,
+        "raw_sha256": "b34626f55e43bc4630b92e8c4f073326b887acd7e3e989f44fcceb7bd898ea45"
+      },
+      {
+        "path": "05_governance/CONTEXT.md",
+        "bytes": 272,
+        "raw_sha256": "3f75c14121dce853ad9a27deb005c7f799dcbea570ea3f2f93711dcde93b334f"
+      },
+      {
+        "path": "05_governance/backlog.md",
+        "bytes": 162,
+        "raw_sha256": "4bc37c4ef269ed360960c7f6a00e7ece1dae53ba3cb80a0a9521d15815ae041c"
+      },
+      {
+        "path": "05_governance/human_owner_notes/README.md",
+        "bytes": 175,
+        "raw_sha256": "b59b5c756fb7234363aaa13b804dff1945a52ef9d25ef95a659732c76a9f1763"
+      },
+      {
+        "path": "05_governance/ledger.jsonl",
+        "bytes": 0,
+        "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "05_governance/reviews/README.md",
+        "bytes": 198,
+        "raw_sha256": "677a5baa249f8131e1de9aa06b56cbffeb1df635e4291fe296d9fac50190749e"
+      },
+      {
+        "path": "06_infra/CONTEXT.md",
+        "bytes": 175,
+        "raw_sha256": "20e3b8e1142b2c02bedb3b1e20b1920c0676d7e55dc9e3fe4fe4e6e052758acd"
+      },
+      {
+        "path": "07_app/CONTEXT.md",
+        "bytes": 147,
+        "raw_sha256": "ad4fc98fecd76970f19392bb8b21aa76005f7afdfbde1eca827b672f63da4938"
+      },
+      {
+        "path": "08_pkg/CONTEXT.md",
+        "bytes": 149,
+        "raw_sha256": "1e5762dfce4826221c7cb6e9e3b9beabbcb50b8d823fc60658d7235512b58b5a"
+      },
+      {
+        "path": "09_ops/CONTEXT.md",
+        "bytes": 157,
+        "raw_sha256": "06b1f1da1b7d5c76789ca945b5568243ac0e055bf209969396fbeb217083eb6e"
+      },
+      {
+        "path": "AGENTS.md",
+        "bytes": 7927,
+        "raw_sha256": "1cf814fdc6c46b9324240d23c273ad604d33cbe2163ab9b3011063e5ecc48759"
+      },
+      {
+        "path": "CLAUDE.md",
+        "bytes": 11,
+        "raw_sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+      },
+      {
+        "path": "ENVIRONMENT.md",
+        "bytes": 2239,
+        "raw_sha256": "d5afba45edc71e3afe7b83fe8d2651c611e0d9e1ff39ca7ba1a9200939962125"
+      },
+      {
+        "path": "README.md",
+        "bytes": 3785,
+        "raw_sha256": "78c6484dcda98b80cb8057f005d1b8411e62843c6dcc7bcea6308919afa1a7e0"
+      },
+      {
+        "path": "docs/autonomy.md",
+        "bytes": 11947,
+        "raw_sha256": "78a820adb7cdcc0f91e23d7a37bb412118a48f2850e84dd4a903bf7643374aed"
+      },
+      {
+        "path": "docs/contracts.md",
+        "bytes": 15312,
+        "raw_sha256": "a0820f0fc83fd7dc566a53bbfeec5b89fffaa27ceb8496c27d99b16ee683f65b"
+      },
+      {
+        "path": "docs/front_repo.md",
+        "bytes": 3364,
+        "raw_sha256": "75c27e75d0fab85fe836d03cee43c6969ad618b86f0d58fb888d28fb6cea3fe9"
+      },
+      {
+        "path": "docs/glossary.md",
+        "bytes": 4128,
+        "raw_sha256": "3f4a9963cfd47ac1104b6bc0d8af6e7f4613d9b7d8afe521fef4a5e3f9c9f6e9"
+      },
+      {
+        "path": "docs/ledger.md",
+        "bytes": 6570,
+        "raw_sha256": "21d04f739612beb41c139d7734763e9d7390067aa9b1342c4eccc47c97de341c"
+      },
+      {
+        "path": "docs/memory.md",
+        "bytes": 1733,
+        "raw_sha256": "10cdb36a1f4076733a518f00dcf05a842db8a03d31e58ac6367cae7f213575df"
+      },
+      {
+        "path": "docs/method.md",
+        "bytes": 10764,
+        "raw_sha256": "3b288362026c0555bb6031eeef424067615471c9ed7c341616bb10f3e52859a6"
+      },
+      {
+        "path": "docs/operating.md",
+        "bytes": 11703,
+        "raw_sha256": "c06e1d53ac5e29e5b7f425ccad14ada6c355bed6912c33238a0ab336f0d63d28"
+      },
+      {
+        "path": "docs/project_checks.md",
+        "bytes": 6904,
+        "raw_sha256": "7a082b6e9ff2cce2552a576469518f277e2d697521635573114c5c78c6548779"
+      },
+      {
+        "path": "docs/roadmap.md",
+        "bytes": 445,
+        "raw_sha256": "9f96a371393d3be3bcc855c7691dda45df29109313c27ada5b8469371da23102"
+      },
+      {
+        "path": "docs/upgrading.md",
+        "bytes": 8700,
+        "raw_sha256": "d67c454d043c3a4c2d2e8535937cb1f0fc88ac7fbff64920454669c57279c0de"
+      },
+      {
+        "path": "docs/walkthrough.md",
+        "bytes": 12793,
+        "raw_sha256": "072fe9cafaaa1360f5455b7aa13fe3825e6dc8c8e8c082dfb14228ac6e3899e3"
+      },
+      {
+        "path": "front_repo.toml",
+        "bytes": 576,
+        "raw_sha256": "a4e76a96e7d2a233b394c60c2f343ab8476508e5132e96227aeb329d7a243efb"
+      },
+      {
+        "path": "frutlups.toml",
+        "bytes": 870,
+        "raw_sha256": "ed85ae432c13bd2cdcc3cbd41ed0d67e8c909b841862e295458011c2db203b02"
+      },
+      {
+        "path": "initialization/architect.md",
+        "bytes": 1894,
+        "raw_sha256": "060c2debf4279832f4c9411ea9fdc0c3520771793b03891407ff6a97e2708ad8"
+      },
+      {
+        "path": "initialization/coder.md",
+        "bytes": 467,
+        "raw_sha256": "4132546efb9365d00f9c37d07d44e5aee7251957c8f029a1fc9edb7d2dfd732b"
+      },
+      {
+        "path": "initialization/memory_llloom.md",
+        "bytes": 824,
+        "raw_sha256": "f682161b5586ad160609fc0f080fe0674c2270bce5e3598509bc51a294c6d5dd"
+      },
+      {
+        "path": "initialization/reviewer.md",
+        "bytes": 637,
+        "raw_sha256": "8a7636924dd39472549156fdfa7b99670da0b433f98e4a3789f7d68cba6a18c8"
+      },
+      {
+        "path": "local_state/README.md",
+        "bytes": 210,
+        "raw_sha256": "e99da4635aac42a3ba61ef01c41e771c6362a4513bd046e2660c9846708b35c8"
+      },
+      {
+        "path": "prompts/for_coding_agent/README.md",
+        "bytes": 143,
+        "raw_sha256": "cba2357afdf557a6735ce9b2d76034229bdf004a128d27504924aea5a57b40d3"
+      },
+      {
+        "path": "prompts/for_review_agent/README.md",
+        "bytes": 157,
+        "raw_sha256": "3f5617bb23233dbb36a8b58d6b76042cf689c0d94da88dfb65830c2a0fdafbf5"
+      },
+      {
+        "path": "prompts/templates/coding_prompt.md",
+        "bytes": 1126,
+        "raw_sha256": "69c11f9f586574c77a6ae311d6d9c64b3486557b01c712853999c4a766557167"
+      },
+      {
+        "path": "prompts/templates/review_prompt.md",
+        "bytes": 2114,
+        "raw_sha256": "cfeba50d525de5b3777b6d157dea7fedea24db0e7a94bf9ac933fed138f5e075"
+      },
+      {
+        "path": "pyproject.toml",
+        "bytes": 432,
+        "raw_sha256": "e467c7615c540abcc037bfc4a08427e5ccbe36a8b5afddfa080877c25c79a059"
+      },
+      {
+        "path": "questions/README.md",
+        "bytes": 281,
+        "raw_sha256": "d8c137abd16e76d52b72415a50174a4bfcb72d7214528596513ad13fc96c25f7"
+      },
+      {
+        "path": "questions/answered/README.md",
+        "bytes": 89,
+        "raw_sha256": "758a150c9439a094404a98a40fb1f6d64a202c9022660de8453be9ffcd080642"
+      },
+      {
+        "path": "questions/open/README.md",
+        "bytes": 58,
+        "raw_sha256": "8f24cb92abeb7042d91a5b3311a40b0ecd689e4a374d84613ec8d41e6ff7c03a"
+      },
+      {
+        "path": "questions/template_question.md",
+        "bytes": 298,
+        "raw_sha256": "ac38151aa1ec36143a53cd86e0898da60414d2012b319acc5b1ccaa397bb62e5"
+      },
+      {
+        "path": "roadmap.yaml",
+        "bytes": 1049,
+        "raw_sha256": "172c4027eab2a3bea46813cf3dab04b51a5c39a978f5df89e03b96f3bf6b6a3f"
+      },
+      {
+        "path": "scripts/_autonomy.py",
+        "bytes": 15774,
+        "raw_sha256": "e72c7129e7950ffa842b67956c373329556d6fa5e604e737c6dbc888e6712750"
+      },
+      {
+        "path": "scripts/_commit.py",
+        "bytes": 26651,
+        "raw_sha256": "ae1531b6712c335de83cc69b1338f2931154749a96c31e2d4d69d9e01c6d8a7e"
+      },
+      {
+        "path": "scripts/_common.py",
+        "bytes": 8879,
+        "raw_sha256": "c456b634ab92ad953591955a3f653eef13125d35248d1392de43666b2a27a144"
+      },
+      {
+        "path": "scripts/_evidence.py",
+        "bytes": 20533,
+        "raw_sha256": "2504fc287ab0ebda7c54d9b96090c493011ff4a7320eb0f7cf931512269c0c45"
+      },
+      {
+        "path": "scripts/_findings.py",
+        "bytes": 10522,
+        "raw_sha256": "69d97583c0d417e03ea539dc34328adfb84bd4df5863e7ddbcb5144393e3f356"
+      },
+      {
+        "path": "scripts/_git.py",
+        "bytes": 9285,
+        "raw_sha256": "50e076471c997de64483cf3d95c5587adc9245246634369704a78ad2fb9bd9fb"
+      },
+      {
+        "path": "scripts/_integrity.py",
+        "bytes": 15618,
+        "raw_sha256": "8b2a35aeaf7497be87da06f31954e4253d0c323e28957c41d5b74c3ad7b28fa3"
+      },
+      {
+        "path": "scripts/_process.py",
+        "bytes": 8762,
+        "raw_sha256": "cbee0b6a1cbf049f8c748e2386b56aa8ebe883a53ffbc83269dffcdc0e514d4f"
+      },
+      {
+        "path": "scripts/_protocol.py",
+        "bytes": 21385,
+        "raw_sha256": "da76f7002e64c45d1b690a8eac5ce6b39f41cd83a7c9313fda95476f2fd7c906"
+      },
+      {
+        "path": "scripts/_workspace.py",
+        "bytes": 5828,
+        "raw_sha256": "8c172a11610aceeeb7c2ce72350adea9fd5b4e6061eb1325ec296cfb709c8d80"
+      },
+      {
+        "path": "scripts/front_repo.py",
+        "bytes": 18683,
+        "raw_sha256": "fdaecc21d7083a63bfe69738543d50f2472c6697566826d6e1027f20546808fd"
+      },
+      {
+        "path": "scripts/hermetic_verification.py",
+        "bytes": 4008,
+        "raw_sha256": "f1c447115fd672851e99adcaae918a570f38707186cb7d699978996832bcf22f"
+      },
+      {
+        "path": "scripts/ledger.py",
+        "bytes": 42344,
+        "raw_sha256": "d5016e29abfb83054fd5c142a48812d659f9d931339d5dafd93f247183a48f58"
+      },
+      {
+        "path": "scripts/prompt.py",
+        "bytes": 34757,
+        "raw_sha256": "12b5c793a7b94bfa80c43dd755f8a87200d6afa5330ab120f09194ce725dbf50"
+      },
+      {
+        "path": "scripts/roadmap.py",
+        "bytes": 13738,
+        "raw_sha256": "b98285db1897d5db376dcacd2ee0b18deffc8ddf1acf953ecf4cae3377d537c3"
+      },
+      {
+        "path": "scripts/verify.py",
+        "bytes": 7551,
+        "raw_sha256": "7c7523afbd593cbaa06f5294c649cc5856fd88d3eef7be9daad51b37439838e1"
+      },
+      {
+        "path": "tests/fixtures/autonomy_v1.json",
+        "bytes": 343766,
+        "raw_sha256": "ca8d6a2b159bb3f468ce725ab0645cd6153338bdb70a19f58027ab16a1c63150"
+      },
+      {
+        "path": "tests/fixtures/protocol_v2.json",
+        "bytes": 25323,
+        "raw_sha256": "59a19d634ccfbd8d8c37616196cb59974b06310b168810e6ba71fda3b8a39891"
+      },
+      {
+        "path": "tests/test_autonomy.py",
+        "bytes": 21177,
+        "raw_sha256": "88c9c56db0df24ba7a61dee4cbfaf8d0b4af82f8eac4292a1f640e992ad42772"
+      },
+      {
+        "path": "tests/test_commit_review.py",
+        "bytes": 29473,
+        "raw_sha256": "dac06c4f06b5e5a122ad6f4b6a232ffcb8827744088d8f38e6d73dac8d1c9a52"
+      },
+      {
+        "path": "tests/test_commit_v2.py",
+        "bytes": 21848,
+        "raw_sha256": "70860541916fff6684f5dacc060705ebd49d6721e26d150dd2d7ca4930b035dc"
+      },
+      {
+        "path": "tests/test_findings_remediation.py",
+        "bytes": 12393,
+        "raw_sha256": "eb33a2df9095545aab4de52ca76e98df048623d8891b96c1f3d39840fb57df8f"
+      },
+      {
+        "path": "tests/test_integrity_v2.py",
+        "bytes": 20292,
+        "raw_sha256": "98990bcf6b395b858bfebd071f286eaee47c06cf276f7f44904b29f16c7197ec"
+      },
+      {
+        "path": "tests/test_process_review.py",
+        "bytes": 1892,
+        "raw_sha256": "62cfac5a72b85d723401ceb859c709c768c440eab525466adaabbf386b379f37"
+      },
+      {
+        "path": "tests/test_project_checks.py",
+        "bytes": 31836,
+        "raw_sha256": "4cfaa40e0d81ee8bfabc2290a3c228dd7554f40c69a74320a1b3c700f3ae6e1b"
+      },
+      {
+        "path": "tests/test_prompt_dependability.py",
+        "bytes": 53193,
+        "raw_sha256": "edfa80ced624d9a9678415574c8842172285f7bef90627c3dd33c38c00bdd15a"
+      },
+      {
+        "path": "tests/test_prompts_v2.py",
+        "bytes": 44446,
+        "raw_sha256": "102dafdecba29ac8e80e4411c29d88e288d387ad5f3c16876d0b76bc68f25a05"
+      },
+      {
+        "path": "tests/test_protocol_v2.py",
+        "bytes": 33178,
+        "raw_sha256": "3b495a1a7a13845f531e675dfd77af39db81b6300d123eec750b2d90c630d53c"
+      },
+      {
+        "path": "tests/test_remediation.py",
+        "bytes": 65517,
+        "raw_sha256": "19f50e3d48725a538cf1ace693ac1297117fd417ac7d48965171fcf7d6507bba"
+      },
+      {
+        "path": "tests/test_review_protocol.py",
+        "bytes": 36659,
+        "raw_sha256": "93a21548cb57959a55fb587df8655c86d9f102224abc0de90d5b246cfb0fefca"
+      },
+      {
+        "path": "tests/test_scaffold.py",
+        "bytes": 43703,
+        "raw_sha256": "9298fdf1515a20237fd6d3bd812b3ebd3c27054c28cc2db059dbfcad44a3b4b6"
+      },
+      {
+        "path": "tests/test_verification_v2.py",
+        "bytes": 25070,
+        "raw_sha256": "75014be56ef21f05441b2e3aab1a34ca15b9afba43de6a0eaa5f65f2e86cc61f"
+      }
+    ]
+  },
+  "development_delta": [
+    {
+      "status": "M",
+      "path": "AGENTS.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "README.md",
+      "group": "release_identity",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/autonomy.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/contracts.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/front_repo.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "A",
+      "path": "docs/glossary.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/ledger.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/memory.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/method.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/operating.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/project_checks.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "docs/upgrading.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "A",
+      "path": "docs/walkthrough.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "initialization/architect.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "initialization/coder.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "initialization/reviewer.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "prompts/templates/coding_prompt.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "prompts/templates/review_prompt.md",
+      "group": "documentation_and_instructions",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "pyproject.toml",
+      "group": "release_identity",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "scripts/_common.py",
+      "group": "configured_git_selection",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "scripts/_evidence.py",
+      "group": "selector_and_evidence_presentation",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "scripts/_findings.py",
+      "group": "selector_and_evidence_presentation",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "scripts/_git.py",
+      "group": "configured_git_selection",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "scripts/prompt.py",
+      "group": "selector_and_evidence_presentation",
+      "in_distribution": true
+    },
+    {
+      "status": "M",
+      "path": "tests/test_commit_v2.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_integrity_v2.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_project_checks.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_prompt_dependability.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_prompts_v2.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_protocol_v2.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_remediation.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_scaffold.py",
+      "group": "development_tests",
+      "in_distribution": false
+    },
+    {
+      "status": "M",
+      "path": "tests/test_verification_v2.py",
+      "group": "development_tests",
+      "in_distribution": false
+    }
+  ],
+  "release_checkpoint_delta": [
+    "M\tREADME.md",
+    "M\tpyproject.toml"
+  ],
+  "checker_pin_delta": {
+    "from": "4632a8915eb03859381ed2a97fc8e408c3814c39",
+    "changed_scripts": [
+      "M\tscripts/_evidence.py",
+      "M\tscripts/_findings.py",
+      "M\tscripts/prompt.py"
+    ]
+  },
+  "coverage": {
+    "count": 150,
+    "shared_native": 147,
+    "template_policy": 3,
+    "D023_predecessors": 144,
+    "cases": [
+      {
+        "corpus": "protocol_v2.json",
+        "case": "legacy-prefix-new-suffix",
+        "target": "template_policy",
+        "valid": false,
+        "source_case_sha256": "ab29764e3aa77428c1b39e0a48b46b4fa2c7468475f6ed8fe70cebecc48fd882",
+        "development_owner": "M008-S06",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[legacy-prefix-new-suffix]",
+        "qualification": "template-policy classification retained; F reader refusal is not template-policy execution"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "blocked-authority-resolution",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "352dd0850e8e49bbd2ad03d9a5f19d6978b926d1319ed27afd55c4523c59ce1a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[blocked-authority-resolution]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "completed-seat-unknown-usage",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "432301ba31350e130611d63e6cbfb868867850bae07e6ee08c993f5a621de964",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[completed-seat-unknown-usage]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "holistic-blocked",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "aafa5ad46a97ade769710d8dcd6caf0032b37196fc2d9bcb05a366babb713f06",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[holistic-blocked]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "holistic-needswork",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "098f3da7b86a305450b8a56818cad34de430a68e9738e6612fc48c6f51fe3bf9",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[holistic-needswork]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "holistic-pass-explicit-close",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "df130f8057584e105ce35028489c36aafdda94f6f38157df519737b2c2af8833",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[holistic-pass-explicit-close]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "optional-approval-intent",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "01595964bd945b227b7fd7eeceef9a5e18d6ca5947d3780ff7afcee424b1b4ec",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[optional-approval-intent]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "illegal-version-reversal",
+        "target": "template_policy",
+        "valid": false,
+        "source_case_sha256": "0f369adc18e28b2931e3d61bfdd05968c356618601e3173dd0e657b42a407126",
+        "development_owner": "M008-S06",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[illegal-version-reversal]",
+        "qualification": "template-policy classification retained; F reader refusal is not template-policy execution"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "unknown-output-contract",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "cc35135bffb542c4e0710922566b46f5b942d8f2045e97efa4bdf7e401a125dd",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[unknown-output-contract]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "unresolved-invocation-cannot-redispatch",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c7664758a889c546ae422118c4a2d966d31032281b322f264ddbfa63126feb8c",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[unresolved-invocation-cannot-redispatch]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "checkpoint-cannot-change-round",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "adf182ad8e352c14f0ff063052caca8dd80a36857bb4fc5c5cd228a00b821bf9",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[checkpoint-cannot-change-round]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "nonhuman-retains-acceptance",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b13acd14114801b755d56c3d2665878355baba85137cd0ad16ed168b3e7f98fd",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[nonhuman-retains-acceptance]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "holistic-disabled-reader-refusal",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3b988ce7d90ca1484c209dada659ba4f4d9e7af9e72397296dd4ef82f0a4bdad",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[holistic-disabled-reader-refusal]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "v2-unbound-unblocked-refusal",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "0cba2db6197604574dd33a8c41f675cbc195db077843d3f12915fa6ddcdcd5f4",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[v2-unbound-unblocked-refusal]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "unknown-ledger-v3",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3d258e6652c7b4d6c601c2afcb3251dbaf3dde888650eceacef65a0cf04885b4",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[unknown-ledger-v3]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "protocol_v2.json",
+        "case": "noncanonical-v2-extension-timestamp",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "e1f7dfa69a99aa66311a8caf5c871c827c01d63020e9915e73a6e6e40422fdf1",
+        "development_owner": "M008-S06",
+        "development_disposition": "converted_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_protocol_v2.py::test_base_event_corpus[noncanonical-v2-extension-timestamp]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "admission-is-the-only-initial-allowance",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "5ba9a444ac4c2a6a6bbe90edf442e65867e9e4aad497c477c617ff2c8aab0506",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[admission-is-the-only-initial-allowance]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "no-admission-no-start",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d2b1f71d03fba4920d611fce1024229d6e8f741ae74fc95dc9f2ed7c8de1dede",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[no-admission-no-start]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-duration-with-partial-provider-telemetry",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "d37b25674f174e345bdae826dddf1beb4fc962ab75a5e85486c75104ee0da629",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-duration-with-partial-provider-telemetry]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-missing-duration-keeps-reservation",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "f13be667201a0fbd727a80e44c3608f3ddbadb1451a964e2ab2d8f268393d79d",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-missing-duration-keeps-reservation]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "failed-short-duration-does-not-refund",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "902b3d0e7f426bfcc2a18b3ec9184dfdab553f2243bfcb211b55cea744216dcf",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[failed-short-duration-does-not-refund]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "resolved-unknown-keeps-reservation",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "6a5b277833307315b9757b64c359e215c901747586653e0b308b4693e9380af7",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[resolved-unknown-keeps-reservation]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "duration-rounds-up-deterministically",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "708ff668e0ca8a1481f350ac0c7793212d5b321cfe7da656cd6d426c3c89f8aa",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[duration-rounds-up-deterministically]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "unfinished-start-debits-before-launch",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "6db9ee13cef65de1e36821067c20210e377836ba4362cec4b68e09d383b0612f",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[unfinished-start-debits-before-launch]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "truthful-overrun-finish-closes-run",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "79912935891aad4bb2200a8f6f268da597afbe47926fd261f238e067eb3f49e2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[truthful-overrun-finish-closes-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "failed-overrun-is-also-visible",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "581c77cb108e945cebd6ce0bd16d42d3be41c9c4aeb5261b4c09a0cb0bc4c336",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[failed-overrun-is-also-visible]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "overrun-forbids-extension",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "e1f3721ddde3fb053a084b425884e877560bf76984a65307bf2fa72707235b7f",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[overrun-forbids-extension]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reservation-cannot-exceed-remaining",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "fe6ab0d01e6519edba48d6c1d9afb27fc2ea6b0e70dc3672c48beeb681a792a9",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reservation-cannot-exceed-remaining]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "clip-final-reservation-to-three-seconds",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "1f19cca3dabb623288277faeb59f3fce72b8facb0e9fce082f562ce5f182996e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[clip-final-reservation-to-three-seconds]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "exhausted-jobs-no-new-start",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "9d9395e4e5e7aa8f98f917f59aa8de21ad3c793d114845151c098422639f2516",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[exhausted-jobs-no-new-start]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "exhausted-time-no-new-start",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "ce3c0814473331a7064a265ff6820be536ef1f358ea6f17d56e7331035278310",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[exhausted-time-no-new-start]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "valid-extension-preserves-charge",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "872a2691806864168606d28f56dfabbdf4547d986a7017e3cfe9b65bdd81f477",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[valid-extension-preserves-charge]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "duplicate-extension-revision",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b9c1f070d912c8c44c1649bead57bafa49f81c134567f19d60ebdcbbb1e676d9",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[duplicate-extension-revision]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "skipped-extension-revision",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "39a2a6246116f4281df4119435133878a034506847c2b37a754a7d52ea3e7302",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[skipped-extension-revision]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "frutlups-cannot-grant-extension",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "24ed46bb13d725b4e441cbedd6bb9f15b83e8ea92b1ae892878efb9c6f9c76a9",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[frutlups-cannot-grant-extension]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "undelegated-architect-cannot-extend",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c4f61b3ae2fd010cd6cbadbb8da86b59912769d4cb0173d7965c7f9e002d6ed0",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[undelegated-architect-cannot-extend]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "delegated-architect-can-extend",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "5aa249a1bfce4f9481b515f58bc352d221b7467f5ee1ed358073e3755103ccb0",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[delegated-architect-can-extend]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "frutlups-cannot-admit",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "ac873d03ae0a3c270d73b547bd2985ba973b09794286944c4974435a0da1cac0",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[frutlups-cannot-admit]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "empty-authority-cannot-grant",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "12aa7ed0c0652655b0eeaaffd77e4922401c0d259a1dbea34b71e3b1f7ffedce",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[empty-authority-cannot-grant]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "duplicate-authority-refs-refuse",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "e74755c312a9015de750c3b044e9047344643e374840264291cac2061ff71b16",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[duplicate-authority-refs-refuse]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "same-authority-set-cannot-grant-again",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "8c70a9ab67c40e5ad8cfb43f37c5dc2c3a33a7f88c0b0696bec679836935a195",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[same-authority-set-cannot-grant-again]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reordered-authority-set-cannot-grant-again",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "7b32ddc0cffa2f4371a008b9a6cd2b1fb8e0c604ec8704dcad41bff361ee33ed",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reordered-authority-set-cannot-grant-again]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "duplicate-run-id",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "a71c9c696b4f99a00ff3851c05a5d861763e19db269fcc89da1d364ce49f87d4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[duplicate-run-id]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "unknown-extension-run",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "89477b409661051b8210d3f53c521c57a5857063edc177b0b9098ddd2d4a1323",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[unknown-extension-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "extension-milestone-must-match",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "2a117b3a8a67574255ad2953081ba29f9ffeca16c55da0329233b52855684f24",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[extension-milestone-must-match]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "successor-head-must-match",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3475c3aa84b7599f231ab050d5754fb31bac08b44dedbd077a014e6769c80ed2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[successor-head-must-match]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "successor-explicitly-supersedes",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "d6858b5aa8545819ed258d2374c739d436ec7e49ec5b3639fe24f8f5c13a1fe4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[successor-explicitly-supersedes]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "superseded-run-cannot-extend",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "a7b611bd1e5cf8c591524701efb8e73ca0a0c6b8ed1761156bd46765ed153001",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[superseded-run-cannot-extend]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "new-run-cannot-bypass-unfinished-operation",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d4fc656c315c505d0285503dfec5871002c5e50ca33e55c04dcf4384281ff6b2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[new-run-cannot-bypass-unfinished-operation]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "extension-cannot-overlap-unfinished-operation",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d2c6f68dfa3c370fed8a92057cb12b56c9b25ba2fcea86ef6598a56e4ccd92ab",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[extension-cannot-overlap-unfinished-operation]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-reserves-seconds-not-model-jobs",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "3328bc99be886026de821ee4be151a6a0c05696d0e3e34d6156016b340b32627",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-reserves-seconds-not-model-jobs]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-completion-settles-time",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "34e385c48604bdd6acec5a07bc161e86efacad2e494344c4e5581852aa175ad3",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-completion-settles-time]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-requires-verifying-state",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "fbd78c82a34ab9bef97975bdd656746a86239cf646dd2f30b59193b2cfded9f1",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-requires-verifying-state]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-requires-current-round",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "55185887924097b1918e02ee3bb853d4a0d2f0dbe920c08e46dc8bd89cc9a799",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-requires-current-round]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-global-overlap-blocks-model",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b56a5f2dd3e37bf7b9e9580802fee204b449c135e432e6fa771b3b2a57acf6de",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-global-overlap-blocks-model]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "model-global-overlap-blocks-verification",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "898016da389c4a006af58f5d32f49867b17f3f95ceedbc2a999a495bd0b0de58",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[model-global-overlap-blocks-verification]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "outside-run-milestone-refuses-during-invocation",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d7a88d0612d1143d85284f6e81b50bf793b0bf0b9b2c77e33bbf02a4a682b35d",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[outside-run-milestone-refuses-during-invocation]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "verification-role-needs-profile",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "8c0b56d98f31c263d94cb31485a6324cf91ae53448beb2fec5366a1dabb5bd32",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[verification-role-needs-profile]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "profile-removal-does-not-erase-run",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "6a6baf3b8fb61df8a64e9832c16f69fbfa1c52dfcc8f0496257f97613026b5a6",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[profile-removal-does-not-erase-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "pre-admission-attempt-history-migration-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "7a58ee30d1413dcf0d9bae62b1f4be7be782fb04a3a89ec822638649e3dcda48",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[pre-admission-attempt-history-migration-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "base-attempt-history-remains-valid",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "1cc940faf819b373038db9428b794f1e0b71f7669c1ceef1762c6cf38e723e53",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[base-attempt-history-remains-valid]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "legacy-nonattempt-prefix-is-preserved",
+        "target": "template_policy",
+        "valid": false,
+        "source_case_sha256": "6aff53633d9eb353b3fce5d75208ba433de1116e30d5895c13b5f6fa812c7194",
+        "development_owner": "M008-S06",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[legacy-nonattempt-prefix-is-preserved]",
+        "qualification": "template-policy classification retained; F reader refusal is not template-policy execution"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "v2-nonattempt-prefix-is-preserved",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "fe768a6d13ac1cec474970763c2007d804f9a5b39f530e9dfd9b4abed3048e1a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[v2-nonattempt-prefix-is-preserved]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "transport-retry-of-retry-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d57b20ff79aa127cb55b989f60bcc9af052abe5040701c10f89afb0ef2c8bcc2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[transport-retry-of-retry-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "format-retry-of-retry-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "652449fc6fdb410c663b674661ccfab3b49f37bdbdf20e104ebfe4606be75313",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[format-retry-of-retry-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "distinct-retry-units-charge-independently",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "a404c3c41a72c05614f4c1af592c967daf02b349f50a02fb904d5575a8ee3638",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[distinct-retry-units-charge-independently]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "retry-after-extension-keeps-contract",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "efe689b1bee18a1999adb2197ff55197daf19cf038d947e5c63b9e80b4621089",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[retry-after-extension-keeps-contract]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "retry-cannot-cross-run-membership",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "eb4f1a3e350902d7a442fcfa92f0ada2f4080c16426c70a6009df68c5e11da99",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[retry-cannot-cross-run-membership]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "initial-relabel-cannot-reset-model-context",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "ace3192f24aa73450f60dd803d650f0ff1a80a412e5f6f18671f0e1e7bfc9436",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[initial-relabel-cannot-reset-model-context]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "out-of-selected-slice-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "ee47550a987335be8e5823388cb377d86757d1995ab554ed43e06a26456b0a4c",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[out-of-selected-slice-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "selection-must-follow-roadmap-order",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c047e2a3e260eb6f0b0f13fa5dcdb6a0f8f1a11f256bdbfb8eff2fee30d28c0b",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[selection-must-follow-roadmap-order]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "selection-must-not-repeat-slice",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "dc141440073ba0632687655be6a1f3fca0791b2f7553010e95a85a40667cdc63",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[selection-must-not-repeat-slice]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "stop-must-be-last-selected-slice",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "a2d6505d1ae1524955a28e2a3eef26cff8bb333a970a115420b9a817978ef48b",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[stop-must-be-last-selected-slice]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "nonholistic-milestone-needs-slice-stop",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b2117a3f302340aef88ceeb6d641e08b03f8129d0eb41fc1ca4f5d4fbc432e25",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[nonholistic-milestone-needs-slice-stop]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "nonholistic-final-acceptance-closes-run",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "337422d651bfa98f4e39dbe6c487478f92dbdc5eb81aea660d66bb9c99a86f0b",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[nonholistic-final-acceptance-closes-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "manual-reopen-never-revives-run",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "191de9c03ef334e80bf7a71700ae863e011d67145167f2582dd2ee0b07b84041",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[manual-reopen-never-revives-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reopened-terminal-run-cannot-dispatch",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "2a3012752016bcad3f7a87f61373d6ff51cd71293abc563950d8b735659c7c62",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reopened-terminal-run-cannot-dispatch]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "terminal-run-cannot-extend",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "9f3485197d66a4e8c671b310f134fd74ef792de0921c953f8984848c1e07bc95",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[terminal-run-cannot-extend]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "already-accepted-stop-cannot-be-admitted",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "38a47b750caef210411fa15672d58eaed6be292a1fc0e4a2144fa41a798c645a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[already-accepted-stop-cannot-be-admitted]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "unrelated-manual-acceptance-is-not-run-stop",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "c994ad3d16f5ee71ebd0d35b586d2a93d880d18ced43c1a88f5c5e24f62a0152",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[unrelated-manual-acceptance-is-not-run-stop]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-close-is-explicit-stop",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "fab1571fa6029f6d87235715a66c52b5b78d6af6e346a113484e4ac12245ce00",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-close-is-explicit-stop]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "slice-acceptance-does-not-close-holistic-boundary",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "f08dfabcd4e14243cc7d22f1ce253674bd5d2c690e7505e0f55266309b6b5242",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[slice-acceptance-does-not-close-holistic-boundary]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "corrective-ceiling-persists-in-fold",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c81c7e614132780792946fd9ba38aabe81767859754b35f1a21df93ff84a1161",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[corrective-ceiling-persists-in-fold]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "new-run-does-not-reset-corrective-consumption",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "22b6171ad243ec02720e9acbe5365e5a07e82ea45d93b7fa2cb94034285b994d",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[new-run-does-not-reset-corrective-consumption]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "invalid-admission-allowance",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "931c99e799420594d4e45f922a94a37d556a5d0be967064ebadc2f19c8df0df9",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[invalid-admission-allowance]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "invalid-admission-max_corrective_rounds",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "f01e35da3ad292e20bce2182c61411f5180d3bc0c7e652e7786a2ad68f857183",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[invalid-admission-max_corrective_rounds]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "invalid-admission-grantors",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "02aa3a4e5c6287b55107b7dd75c28b51037171e777d032074069648920fe62d9",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[invalid-admission-grantors]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "invalid-admission-previous",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "0704c74ac088900c8b0d1b1f16b62b1659030d11e0649b1bc52462359fbe13ea",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[invalid-admission-previous]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "invalid-admission-unexpected",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "2d8a082bde7d2590100cdd054271ea34193d160c5aebd34b91c0e39b9794e84e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[invalid-admission-unexpected]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "negative-extension-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "2499b8ef4a246c057ab7054b9aed1541d80f8c914f224a55ce6b6020de2daaec",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[negative-extension-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "zero-extension-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "071a60a4fbb5a20840550479d51bf61d0fd388bcb1d1cff3b938e5e68a0b4cc4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[zero-extension-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "unknown-allowance-unit-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "baf2e9f9de04c7f1df665180a0c04fad0fdadc324e9af5a9f29b1d465a84ebc6",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[unknown-allowance-unit-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "slice-stop-does-not-authorize-holistic",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b24779493018b78f0795e361ede80df3c7162eb44b37c43ab1c86e052350783e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[slice-stop-does-not-authorize-holistic]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "slice-stop-allows-preflight-milestone-probe",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "2d3ba36626d5f78d397c5fd087ad2f41295bc9cf75f6dc5a28a3a30e959cd863",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[slice-stop-allows-preflight-milestone-probe]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-finish-cannot-settle-twice",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "212eeabf31a3be4c4310073d922a6e99076aa3a01252902ba154354c658eab6c",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-finish-cannot-settle-twice]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-blocker-stops-selected-slice-dispatch",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "28352b45ed6205a718f20ceaf2fd53d88a64210fbc1472b0bc4b3fc823879cee",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-blocker-stops-selected-slice-dispatch]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "initial-coder-requires-issued-prompt",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "a8ffc1518f013e5dce8bf0b72b8452416f3a066d6da303d5e51c8810a78e7aff",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[initial-coder-requires-issued-prompt]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "issued-coder-round-reserves-valid-job",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "23ee02f71135ad0ee3f9a42caca7201b040729412298eb6b0719b9e4bb13a4b0",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[issued-coder-round-reserves-valid-job]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-future-round-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "d5a373ef0fd6ca1535a660ad2f0e744653c34104a72c4141b5b6b0a9e8554cc6",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-future-round-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-verifying-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "92d520dcda3ce3495bde841f4bc4f1508fc1f35bd5742a6957732945be8d82a7",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-verifying-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-reviewing-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "5fc3be5417142057ccf233d18f3e97dd7fc4bcff4ce2be93c6ecbeb798beebd1",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-reviewing-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-accept-pending-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b99db036654c5cb221a272bccd9c9fe7171d510860ddeccd488e40f6f5dfe201",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-accept-pending-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-accepted-state-refuses-before-holistic-close",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c164030263503c8fffec83a3c9cf70a5072e5a715dc99db6c14702d83c271e2c",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-accepted-state-refuses-before-holistic-close]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-before-corrective-prompt-cannot-bypass-zero-ceiling",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "c69343797adca921342abe7b13bf05489220b354bf19fbf376536fd1fa94a4a1",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-before-corrective-prompt-cannot-bypass-zero-ceiling]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-after-corrective-prompt-still-obeys-zero-ceiling",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "313aa5cdd6ebd82ac382a53b4d0ad64aaff6d73ea3fb8917d0262135f4cc8ec1",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-after-corrective-prompt-still-obeys-zero-ceiling]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-stale-round-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "ffd6c7ca850be64bd427571fcb6dd65e317c8879041918e46f93dabd7fcc1df2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-stale-round-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "issued-corrective-coder-can-use-existing-ceiling",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "ae36cc620ce5ac0f0c41dbd6466d203e2e4779ec402546b636fbd3bbebae2543",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[issued-corrective-coder-can-use-existing-ceiling]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "coder-blocked-state-needs-resolution",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "2074c5e190a99de3fff72967663e1e130988a0f820934eaf482e312599e36768",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[coder-blocked-state-needs-resolution]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "resolved-coder-still-needs-fresh-prompt",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "71bfadd03c008994d14eaf54b1b28e1d77f3a9abaebfe932bca002a53b6f88a4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[resolved-coder-still-needs-fresh-prompt]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "new-milestone-admission-cannot-bypass-global-unfinished",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "48b28071d4ebaba428f38d2d59e6bf9b45c7c8f268f3fbe14507e025b6abed61",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[new-milestone-admission-cannot-bypass-global-unfinished]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "planned-milestone-cannot-be-admitted",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "95882e5138402e07fc65bd1b4404fe42e6e089c5efae467435079993049df77e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[planned-milestone-cannot-be-admitted]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "done-label-alone-cannot-admit-run",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "156e6d7d0532f9d6c26a4e9fdddfc9c74f7c1c4f3e078317d5ae4e63822905c3",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[done-label-alone-cannot-admit-run]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-holistic-history-survives-done-roadmap",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "7b6f7f57cb2c1dd5a94c76bcf098d08ff1ebeefa3725d895ba61c956d8304d62",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-holistic-history-survives-done-roadmap]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-nonholistic-history-survives-done-roadmap",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "7ccf00c605736e9a90291b01f5aed2f34861829208a6385e358a94133ea104c2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-nonholistic-history-survives-done-roadmap]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "done-history-with-unsettled-attempt-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "12b23403d3db580db7738142d640dc3b32173a3f4fde690e16984c4d403c7e6a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[done-history-with-unsettled-attempt-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "done-history-must-complete-whole-milestone",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "8d04cb3f846d531ea4182429abe2620183fa0677d5ed87bf0112bbb62adedf1e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[done-history-must-complete-whole-milestone]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-unstarted-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "701b6b62c72ad64be7132752c2d842933e383d8285a2e9743dd2adf22f28d26c",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-unstarted-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-coding-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "5ae740d3761a8b6fc50ab64786801145ce280b9969615d7aa6c753aa703577a0",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-coding-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-verifying-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "8115e0bebfcc937b7e9144b4988a5fe08bb84f82cd6b3054d5d1105362f8b7ce",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-verifying-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-accept-pending-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "fe1cf6af900ded284e8229b24ae111edceeae71e5cde9da1b1edb0a1c2e4491b",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-accept-pending-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-accepted-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3db6fea5ed0d4946c69c60d58a03280fa296653d137494881ada1c39c1ed6f4b",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-accepted-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-future-round-2-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "cb03782d8596006d1ef36bda92ba5265864810a4a8cd1c42d7e0651faa31a25e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-future-round-2-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-future-round-3-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "792eeaec403af0095fafef02ab2769012e9270a6810a0ca9ba303442256feead",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-future-round-3-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-current-round-and-completion",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "679655e626b7d7922a72f14818e0086c399bc061fcae3874112aa20ccb6578f4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-current-round-and-completion]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-valid-transport-chain",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "02030d9e0d0a1eda7d9eb7442e85b9db9e9b9c205daeb4fe6979566fa7877383",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-valid-transport-chain]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-valid-format-chain",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "e2203ab0f1f69468d48b82ba2e07d0dc694695daee3860952ca0920129d4de70",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-valid-format-chain]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-stale-round-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "4adcf368630e30dd2f0038c0706370e977289e4afbedb8500b3637c9b0282651",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-stale-round-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "reviewer-after-correction-current-round",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "784583aacb5c2f81ce756144c50d1beb840a48ad2a82a841160370d40cf72edb",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[reviewer-after-correction-current-round]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-unstarted-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "f02e713b4a05b78089f3eda35a65ecd4398ac04c9687d448acda241f50b39c3a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-unstarted-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-reviewing-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "be95dd9ac14535d0f0d483f635868b03ac19499ea6b9e92cfc71bcd7181d8eef",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-reviewing-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-accept-pending-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3f655ba909a38065dc676d7fb23b9d985553a4b55bb35f081c514b6893eaf02e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-accept-pending-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-close-pending-state-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "9284f7999288023e15e790c26e8e67d8ac196068fb65a60cb15de08aedebe3a2",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-close-pending-state-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-cannot-review-only-selected-slices",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "9ec629510e943cd893420fad8e32129a346ef806f8599b67799979102cee42fd",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-cannot-review-only-selected-slices]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-slice-scope-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "98233a5b8503c53f62b8cec28081b2ea97dc9ca97e3883b2f8adcb8417efff80",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-slice-scope-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-numeric-round-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b6bb582634bf59e237e837b21e00287803ea21fcab1b4218a2d84985f1049953",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-numeric-round-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-accepted-milestone-and-completion",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "7219659456d318d11da3bfee46f747b4c925462fedd70a0abf79c8784ad5dbf6",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-accepted-milestone-and-completion]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-valid-transport-chain",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "a5b541af68d72075a5b53bb38d85b526031f8b99afe5a6b3cb1a03f6a0c380c8",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-valid-transport-chain]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-valid-format-chain",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "4ebfdcfcdbb82f795a4b5ce6fd8651a11f8a4f75a95be53043733e1019430029",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-valid-format-chain]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-blocked-reservation-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "8b641c670f71208c095ede04cab4f300f8fa7ff76499563154ad69834713646a",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-blocked-reservation-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-resolved-decision-can-review",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "02c0abef75f0d32e60e0b6ec1b27aa99daca342b6651980c3c20b90466afb9f4",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-resolved-decision-can-review]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-reopened-slice-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "b347d1aadd9d887e375bdfbedad74377fa2c669682e1154942acc496ed19f117",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-reopened-slice-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "holistic-after-reopened-slice-acceptance",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "8684758f024aa667696e55963047581aeb7c25e0cfbaa6474a116921c26b070e",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[holistic-after-reopened-slice-acceptance]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "extension-cannot-reset-crashed-transport-chain",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "9a0c3c6304b17d46050dbf2ccbf5e5504e23dc754b213a8f7a08b3565d134fc3",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[extension-cannot-reset-crashed-transport-chain]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "done-history-does-not-block-another-active-milestone",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "8dc540f6743dbeddae1973246f2020496d1f26063e8facdac90af7232cc0d457",
+        "development_owner": "M008-S06",
+        "development_disposition": "retained_native",
+        "prior_D023_case": true,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[done-history-does-not-block-another-active-milestone]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "no-active-planned-admitted-history-refuses",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "3e5f9edacca33ebfcd348ff9ed00fbdc126e024125f3e7fc63ac183a0ded4835",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[no-active-planned-admitted-history-refuses]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-run-cannot-become-planned",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "fb1f8c3cf3180eddd6597ca47da88af62909f04073b8409373a4f5421e9248e6",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-run-cannot-become-planned]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "overrun-run-cannot-become-planned",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "4f87061fdbd6f9b512864199016238cf7742a4cd1559f169f54c0b35569c2fd0",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[overrun-run-cannot-become-planned]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "superseded-run-cannot-become-planned",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "01483b018f9d0ec4e7cb311d88eb5fcfe5ba541e17164660552854edbee02c58",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[superseded-run-cannot-become-planned]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "done-history-requires-holistic-closure",
+        "target": "shared_native",
+        "valid": false,
+        "source_case_sha256": "6a99601f66559b30138252827215f007ea0531e24a50cedda5818a0cbf208e63",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_refusal",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[done-history-requires-holistic-closure]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      },
+      {
+        "corpus": "autonomy_v1.json",
+        "case": "completed-done-plus-never-admitted-planned",
+        "target": "shared_native",
+        "valid": true,
+        "source_case_sha256": "ed0c0e728879b88b280e17024273c787a8c0499927957ea1d9e57e91f1efa768",
+        "development_owner": "M008-S03",
+        "development_disposition": "new_native_positive",
+        "prior_D023_case": false,
+        "delta": "byte-identical case; original dispositions retained",
+        "final_reader_node": "test_autonomy.py::test_profile_case[completed-done-plus-never-admitted-planned]",
+        "qualification": "final corpus consumed by the private F native reader; no public, installed or live claim"
+      }
+    ]
+  }
+}

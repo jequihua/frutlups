@@ -5,8 +5,15 @@ import sys
 import time
 
 from fake_pi import action, report
+from frutlups.render import dispatch_framing
 
-prompt = sys.stdin.buffer.read().decode("utf-8")
+observed = sys.stdin.buffer.read().decode("utf-8")
+framing = dispatch_framing("claude")
+if not observed.endswith(framing):
+    sys.stderr.write("fake_claude: stdin lacks the exact Claude dispatch framing\n")
+    sys.exit(2)
+# The scripted task is exactly what precedes the accepted suffix (observed == task + framing).
+prompt = observed[:-len(framing)]
 selected = action(prompt)
 failure = selected.get("failure")
 if failure == "timeout":

@@ -34,14 +34,26 @@ def report(prompt, selected):
         return "OK"
     if "text" in selected:
         return selected["text"]
+    if prompt.startswith("Format repair only."):
+        reference = re.search(r"original contract (?:at )?`([^`]+)`", prompt)[1]
+        prompt = Path(reference).read_text("utf-8")
     scope = re.search(r"# Review prompt: (M\d{3}(?:-S\d{2})?)", prompt)[1]
     round_no = re.search(r"round (\d+|holistic)", prompt)[1]
     result = selected.get("verdict", "pass")
     rows = selected.get("rows", [])
+    updates = []
+    for identifier in selected.get("close_ids", []):
+        records = [json.loads(line) for line in Path("05_governance/ledger.jsonl").read_text("utf-8").splitlines()]
+        source = next(row for row in reversed(records)
+                      if row["ev"] in ("reviewed", "holistic_reviewed")
+                      and f"| {identifier} |" in Path(row["report"]).read_text("utf-8"))
+        updates.append(f"| {source['report']} | {source['sha']} | {identifier} | closed_by_review | - |")
+    update_table = ("\n\n## Finding updates\n\n| source | sha | id | disposition | related |\n"
+                    "| --- | --- | --- | --- | --- |\n" + "\n".join(updates)) if updates else ""
     return (
         f"# Review: {scope} round {round_no}\n\n## Findings\n\n"
         "| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n"
-        + "\n".join(rows)
+        + "\n".join(rows) + update_table
         + "\n\n## Closure Decision\n\n"
         f"Objective status: {'achieved' if result == 'pass' else 'not_achieved'}\n"
         "Objective evidence: Scripted fixture evidence.\n\n## Verdict\n"
@@ -66,6 +78,12 @@ def main():
         if os.environ["FRUTLUPS_SEAT"] == "coder"
         else report(prompt, selected)
     )
+    if os.environ["FRUTLUPS_SEAT"] == "coder" and "text" not in selected:
+        contracts = re.findall(r"```json\n(.*?)\n```", prompt, re.S)
+        if contracts:
+            value = json.loads(contracts[-1])
+            value.update(requirement="Scripted fixture", reason=selected.get("outcome_reason", "Implemented scripted fixture change."))
+            text = json.dumps(value)
     message = {
         "role": "assistant",
         "content": [{"type": "text", "text": text}],
@@ -81,6 +99,9 @@ def main():
         )
     print(json.dumps({"type": "message_end", "message": message}))
     print(json.dumps({"type": "agent_end"}))
+    if not failure:
+        # Pi's terminal settlement record; the real reader requires it for completion.
+        print(json.dumps({"type": "agent_settled"}))
 
 
 if __name__ == "__main__":

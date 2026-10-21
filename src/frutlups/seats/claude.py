@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from frutlups.config import Config
 from frutlups.procs import ProcessResult, run_process
+from frutlups.render import dispatch_framing
 
 from . import (
+    FINAL_TEXT_CAP,
     FailureClass,
     Job,
     JobResult,
@@ -23,7 +26,7 @@ WRITE_TOOLS = ("Read", "Edit", "Write", "Bash", "Grep", "Glob")
 
 
 def tools_for(role: Role) -> tuple[str, ...]:
-    return WRITE_TOOLS if role is Role.coder else READ_TOOLS
+    return (WRITE_TOOLS if role is Role.coder else READ_TOOLS) + ("Agent",)
 
 
 def _argv(job: Job, config: Config) -> tuple[str, ...]:
@@ -51,22 +54,27 @@ def _argv(job: Job, config: Config) -> tuple[str, ...]:
 
 
 def _integer(value: object) -> int | None:
-    return value if not isinstance(value, bool) and isinstance(value, int) else None
+    return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
 
 
 def _cost(value: object) -> float | None:
-    numeric = not isinstance(value, bool) and isinstance(value, (int, float))
-    return float(value) if numeric else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        value = float(value)
+    except OverflowError:
+        return None
+    return value if math.isfinite(value) and 0 <= value <= 2**63 - 1 else None
 
 
 def _tokens_in(usage: object) -> int | None:
     if not isinstance(usage, dict):
         return None
-    counts = [_integer(usage.get("input_tokens"))]
-    counts += [_integer(usage.get(key, 0)) for key in (
-        "cache_read_input_tokens", "cache_creation_input_tokens",
+    counts = [_integer(usage.get(key)) for key in (
+        "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
     )]
-    return sum(counts) if all(count is not None for count in counts) else None
+    known = [count for count in counts if count is not None]
+    return sum(known) if known else None
 
 
 def _classify(data: dict, process: ProcessResult) -> FailureClass | None:
@@ -86,7 +94,7 @@ def _classify(data: dict, process: ProcessResult) -> FailureClass | None:
 def _parse(path, process: ProcessResult) -> tuple[dict | None, FailureClass | None]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+    except (OSError, UnicodeError, ValueError, RecursionError):
         return None, FailureClass.output
     valid = (
         isinstance(data, dict)
@@ -101,32 +109,70 @@ def _parse(path, process: ProcessResult) -> tuple[dict | None, FailureClass | No
 class ClaudeSeat:
     @result_boundary
     def run(self, job: Job, config: Config) -> JobResult:
-        stdout, stderr = job_output_paths(job, "result.json")
+        stdout, stderr = job_output_paths(job, "stdout.json")
+        env = child_environment(job, config)
+        env["CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"] = "0"
+        for name in ("BASH_DEFAULT_TIMEOUT_MS", "BASH_MAX_TIMEOUT_MS",
+                     "CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS"):
+            env[name] = str(math.ceil(job.timeout * 1000))
         process = run_process(
-            _argv(job, config), job.cwd, child_environment(job, config), job.timeout,
-            stdout, stderr, Path(job.prompt_path).read_bytes(),
+            _argv(job, config), job.cwd, env, job.timeout,
+            stdout, stderr, Path(job.prompt_path).read_bytes() + dispatch_framing("claude").encode(),
         )
+        data, failure = _parse(stdout, process)
         if process.timed_out:
             failure = FailureClass.timeout
-            data = None
         elif process.exception:
             failure = FailureClass.transport
-            data = None
-        else:
-            data, failure = _parse(stdout, process)
-        usage = data.get("usage", {}) if isinstance(data, dict) else {}
+        text = data.get("result") if isinstance(data, dict) else None
+        diagnostic = None
+        if text is not None:
+            try:
+                if len(text.encode("utf-8")) > FINAL_TEXT_CAP:
+                    text = None
+                    diagnostic = "Claude final text exceeds 1 MiB UTF-8 limit"
+            except UnicodeError:
+                text = None
+                diagnostic = "Claude final text contains invalid UTF-8"
+        if process.stdout_truncated:
+            diagnostic = "Claude raw stdout exceeds 8 MiB capture limit"
+        if diagnostic and failure is None:
+            failure = FailureClass.output
+        metrics, completeness = _metrics(data, failure)
         completed = failure is None
         return JobResult(
             "completed" if completed else ("timed_out" if process.timed_out else "failed"),
             failure,
-            data.get("result") if isinstance(data, dict) else None,
+            text,
             process.exit,
             process.secs,
-            _tokens_in(usage),
-            _integer(usage.get("output_tokens")) if isinstance(usage, dict) else None,
-            _cost(data.get("total_cost_usd")) if isinstance(data, dict) else None,
+            *metrics,
             None,
             stdout,
             stderr,
-            None if completed else process.exception or f"Claude {failure.value} failure",
+            None if completed else (process.exception or diagnostic or f"Claude {failure.value} failure")[:2048],
+            process.stdout_truncated, process.stderr_truncated, completeness,
         )
+
+
+def _metrics(data, failure):
+    data = data if isinstance(data, dict) else {}
+    usage = data.get("usage", {})
+    fallback = (_tokens_in(usage),
+                _integer(usage.get("output_tokens")) if isinstance(usage, dict) else None)
+    cost = _cost(data.get("total_cost_usd"))
+    models = data.get("modelUsage")
+    totals = None
+    if isinstance(models, dict) and models:
+        counts = [[_integer(entry.get(key)) for key in (
+            "inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens", "outputTokens",
+        )] if isinstance(entry, dict) else [None] for entry in models.values()]
+        if all(all(value is not None for value in row) for row in counts):
+            summed = (sum(sum(row[:3]) for row in counts), sum(row[3] for row in counts))
+            if all(value <= 2**63 - 1 for value in summed):
+                totals = summed
+    metrics = (*(totals if totals is not None else fallback), cost)
+    completeness = ("unknown" if all(value is None for value in metrics) else
+                    "complete" if failure is None and totals is not None and cost is not None
+                    else "partial")
+    return metrics, completeness

@@ -11,11 +11,13 @@ from ._paths import safe_rel
 MAIN_KEYS = {
     "schema", "until", "max_corrective_rounds", "max_jobs", "max_wall_minutes",
     "commit_on_accept", "prompt_dir", "review_prompt_dir", "reviews_dir", "ledger",
-    "seats", "timeouts",
+    "seats", "timeouts", "limits",
 }
 LOCAL_KEYS = {"schema", "pi", "claude", "git", "llloom", "path_dirs", "env_passthrough"}
 SEAT_KEYS = {"adapter", "provider", "model", "effort", "corrective_effort"}
 TIMEOUT_KEYS = {"coder_seconds", "reviewer_seconds", "verification_seconds"}
+DEFAULT_PI_RECORD_BYTES = 2 * 1024 * 1024
+MAX_PI_RECORD_BYTES = 2**53 - 1  # JavaScript Number.MAX_SAFE_INTEGER.
 
 
 class ConfigError(ValueError):
@@ -58,6 +60,7 @@ class Config:
     llloom: str | None
     path_dirs: tuple[str, ...]
     env_passthrough: tuple[str, ...]
+    pi_record_bytes: int = DEFAULT_PI_RECORD_BYTES
 
     @classmethod
     def load(cls, root: Path) -> "Config":
@@ -65,7 +68,7 @@ class Config:
         local = _load(root / "frutlups.local.toml")
         _reject_credentials(main)
         _reject_credentials(local)
-        _keys(main, MAIN_KEYS, MAIN_KEYS, "frutlups")
+        _keys(main, MAIN_KEYS, MAIN_KEYS - {"limits"}, "frutlups")
         _keys(local, LOCAL_KEYS, LOCAL_KEYS - {"llloom"}, "frutlups.local")
         if main["schema"] != "frutlups/1":
             raise ConfigError("schema: must be frutlups/1")
@@ -93,6 +96,11 @@ class Config:
         timeouts = Timeouts(**{
             key: _integer(raw_timeouts[key], f"timeouts.{key}") for key in TIMEOUT_KEYS
         })
+        limits = _mapping(main.get("limits", {}), "limits")
+        _keys(limits, {"pi_record_mib"}, set(), "limits")
+        record_bytes = _integer(limits.get("pi_record_mib", 2), "limits.pi_record_mib") * 1024 * 1024
+        if record_bytes > MAX_PI_RECORD_BYTES:
+            raise ConfigError("limits.pi_record_mib: byte limit exceeds JavaScript's exact integer range")
         executables = {
             key: _absolute(local[key], key) for key in ("pi", "claude", "git")
         }
@@ -106,6 +114,7 @@ class Config:
             main["schema"], until, **integers, commit_on_accept=main["commit_on_accept"],
             **paths, seats=MappingProxyType(seats), timeouts=timeouts, **executables,
             llloom=llloom, path_dirs=path_dirs, env_passthrough=env,
+            pi_record_bytes=record_bytes,
         )
 
 

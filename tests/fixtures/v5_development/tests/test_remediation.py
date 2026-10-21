@@ -1,0 +1,1389 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import yaml
+
+from test_scaffold import PASS_REPORT, git_init, project_copy, quiet_call, run_git, set_full
+from test_scaffold import close_findings
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+import _common as common  # noqa: E402
+import _evidence as evidence  # noqa: E402
+import front_repo  # noqa: E402
+import hermetic_verification as hermetic  # noqa: E402
+import ledger  # noqa: E402
+import prompt  # noqa: E402
+import roadmap  # noqa: E402
+import verify  # noqa: E402
+
+
+SHA = "a" * 64
+BLOCKED_REPORT = """# Review: M001-S01 round 1
+
+## Findings
+| id | severity | disposition | summary |
+| --- | --- | --- | --- |
+| M001-S01-R1-F1 | P1 | open | external decision required |
+
+## Closure Decision
+Objective status: indeterminate
+Objective evidence: The owner must resolve the named decision.
+
+## Verdict
+Verdict: blocked - next: ask the owner
+"""
+
+
+def needs_report(round_no: int) -> str:
+    return (
+        PASS_REPORT.replace("round 1", f"round {round_no}")
+        .replace(
+            "| --- | --- | --- | --- |",
+            "| --- | --- | --- | --- |\n"
+            f"| M001-S01-R{round_no}-F1 | P1 | open | correct round {round_no} |",
+        )
+        .replace(
+            "Verdict: pass - next: accept the slice",
+            "Verdict: needs_work - next: correct the finding",
+        )
+    )
+
+
+def append_accepted(root: Path, sid: str) -> None:
+    """Real native artifacts and accepted commit, ready for the next slice."""
+    if not (root / ".git").exists():
+        set_full(root, "pass")
+        git_init(root)
+        run_git(root, "add", ".")
+        run_git(root, "commit", "-qm", "baseline")
+    prompt.coding(root, sid)
+    if quiet_call(ledger.main, ["--root", str(root), "coded", sid]):
+        raise AssertionError("native coded setup failed")
+    if not verify.run(root, sid, 10)[0]["ok"]:
+        raise AssertionError("native verification setup failed")
+    report = f"05_governance/reviews/{sid}_review.md"
+    (root / report).write_text(PASS_REPORT.replace("M001-S01", sid), encoding="utf-8")
+    for args in (("record", report), ("accept", sid, "--commit")):
+        if quiet_call(ledger.main, ["--root", str(root), *args]):
+            raise AssertionError(f"native acceptance setup failed: {args}")
+
+
+def add_second_slice(root: Path) -> None:
+    path = root / "roadmap.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    second = json.loads(json.dumps(data["milestones"][0]["slices"][0]))
+    second.update({"id": "M001-S02", "title": "Second slice"})
+    data["milestones"][0]["slices"].append(second)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8", newline="\n")
+
+
+def prepare_real_loop(root: Path) -> None:
+    project_copy(root)
+    set_full(root, "raise SystemExit(0)")
+    git_init(root)
+    run_git(root, "add", ".")
+    run_git(root, "commit", "-m", "start")
+
+
+class EvidenceHashTests(unittest.TestCase):
+    def test_text_line_endings_are_normalized_but_binary_bytes_are_raw(self) -> None:
+        self.assertEqual(
+            common.evidence_sha_bytes(b"first\nsecond\n"),
+            common.evidence_sha_bytes(b"first\r\nsecond\r\n"),
+        )
+        self.assertNotEqual(
+            common.evidence_sha_bytes(b"first\rsecond\n"),
+            common.evidence_sha_bytes(b"first\nsecond\n"),
+        )
+        self.assertNotEqual(
+            common.evidence_sha_bytes(b"\x00first\r\n"), common.evidence_sha_bytes(b"\x00first\n")
+        )
+
+    def test_file_and_git_blob_share_normalized_evidence_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            git_init(root)
+            path = root / "evidence.md"
+            path.write_bytes(b"first\nsecond\n")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "seed")
+            path.write_bytes(b"first\r\nsecond\r\n")
+            blob = common.git(root, "show", "HEAD:evidence.md").stdout
+            self.assertEqual(common.sha(path), common.evidence_sha_bytes(blob))
+
+    def test_streaming_hash_normalizes_crlf_across_a_chunk_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / "boundary.txt"
+            data = b"x" * (common.HASH_CHUNK - 1) + b"\r\nlast\r"
+            path.write_bytes(data)
+            self.assertEqual(common.sha(path), common.evidence_sha_bytes(data))
+
+    def test_crlf_evidence_survives_acceptance_and_a_fresh_clone(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            base = Path(name)
+            source = base / "source"
+            clone = base / "clone"
+            project_copy(source)
+            add_second_slice(source)
+            set_full(source, "raise SystemExit(0)")
+            git_init(source)
+            run_git(source, "config", "core.autocrlf", "true")
+            run_git(source, "add", ".")
+            run_git(source, "commit", "-m", "start")
+
+            prompt.coding(source, "M001-S01")
+            (source / "07_app/feature.txt").write_bytes(b"done\r\n")
+            self.assertEqual(
+                quiet_call(ledger.main, ["--root", str(source), "coded", "M001-S01"]),
+                0,
+            )
+            self.assertTrue(verify.run(source, "M001-S01", 10)[0]["ok"])
+            prompt.review(source, "M001-S01")
+            report = source / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.write_bytes(PASS_REPORT.replace("\n", "\r\n").encode())
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    ["--root", str(source), "record", report.relative_to(source).as_posix()],
+                ),
+                0,
+            )
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    ["--root", str(source), "accept", "M001-S01", "--commit"],
+                ),
+                0,
+            )
+
+            subprocess.run(
+                ["git", "-c", "core.autocrlf=false", "clone", "-q", str(source), str(clone)],
+                check=True,
+                capture_output=True,
+            )
+            events = ledger.read(clone / "05_governance/ledger.jsonl")
+            self.assertEqual(ledger.check(clone, roadmap.load(clone), events), [])
+            self.assertTrue((clone / prompt.coding(clone, "M001-S02")).is_file())
+
+
+class LedgerRemediationTests(unittest.TestCase):
+    def test_coded_cli_records_original_hashes_for_many_deletions(self):
+        from test_prompts_v2 import fixture
+
+        for count in (50, 700):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                fixture(root)
+                expected = []
+                for number in range(count):
+                    rel = f"07_app/file-{number:04d}.txt"
+                    (root / rel).write_bytes(f"original {number}\n".encode())
+                    expected.append({"path": rel, "sha": common.sha(root / rel), "kind": "deleted"})
+                run_git(root, "add", ".")
+                run_git(root, "commit", "-qm", "deletion baseline")
+                prompt.coding(root, "M001-S01")
+                for row in expected:
+                    (root / row["path"]).unlink()
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-B",
+                        str(root / "scripts/ledger.py"),
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                    capture_output=True,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                events = ledger.read(root / "05_governance/ledger.jsonl")
+                coded = next(event for event in reversed(events) if event["ev"] == "coded")
+                self.assertEqual(coded["changed"], expected)
+                manifest = json.loads((root / coded["manifest"]["path"]).read_text())
+                self.assertEqual(manifest["changed"], [{**row, "round": 1} for row in expected])
+
+    def test_coded_cost_validates_persists_and_folds(self) -> None:
+        for cost in (0, 2, 0.125):
+            with self.subTest(cost=cost), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                prepare_real_loop(root)
+                rm = roadmap.load(root)
+                path = root / "05_governance/ledger.jsonl"
+                base = {"by": "architect", "slice": "M001-S01", "round": 1}
+                prompt.coding(root, "M001-S01")
+                manifest = ledger._save_json(root, "M001-S01", 1, "manifest", {
+                    "schema": "frutlups.manifest/2", "slice": "M001-S01",
+                    "round": 1, "changed": [],
+                })
+                ledger.append(path, {
+                    **base, "ev": "coded", "changed": [], "cost_usd": cost,
+                    "result": "implemented", "manifest": manifest,
+                }, rm)
+                events = ledger.read(path)
+                self.assertEqual({event["schema"] for event in events}, {"frutlups.ledger/2"})
+                self.assertEqual(events[-1]["cost_usd"], cost)
+                state = ledger.fold(events, rm)["slices"]["M001-S01"]
+                self.assertEqual(state["step"], "verifying")
+                self.assertEqual(state["round"], 1)
+
+    def test_coded_cost_rejects_invalid_values_like_reviewed_cost(self) -> None:
+        base = {
+            "schema": "frutlups.ledger/2",
+            "t": "2026-09-07T00:00:00Z",
+            "by": "architect",
+            "slice": "M001-S01",
+            "round": 1,
+        }
+        for fields in (
+            {
+                "ev": "coded", "changed": [], "result": "implemented",
+                "manifest": {"path": "manifest.json", "sha": SHA},
+            },
+            {"ev": "reviewed", "report": "r.md", "sha": SHA, "verdict": "pass", "open": []},
+        ):
+            for cost in ("0.25", None, True, -1, -0.25, [], {}):
+                with self.subTest(event=fields["ev"], cost=cost):
+                    with self.assertRaisesRegex(ValueError, "invalid text, usage, or actor field"):
+                        ledger._validate({**base, **fields, "cost_usd": cost})
+
+    def test_holistic_carried_p3_reaches_backlog_once(self) -> None:
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                project_copy(root)
+                append_accepted(root, "M001-S01")
+                backlog = root / "05_governance/backlog.md"
+                line = "- M001-H1-P3: polish later"
+                if existing:
+                    backlog.write_text(backlog.read_text(encoding="utf-8") + line + "\n")
+                outside = backlog.read_text(encoding="utf-8")
+                report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+                report.parent.mkdir(parents=True, exist_ok=True)
+                text = PASS_REPORT.replace("M001-S01 round 1", "M001 round holistic").replace(
+                    "| --- | --- | --- | --- |",
+                    "| --- | --- | --- | --- |\n| M001-H1-P3 | P3 | carried | polish later |",
+                )
+                report.write_text(text, encoding="utf-8")
+                args = [
+                    "--root",
+                    str(root),
+                    "record",
+                    report.relative_to(root).as_posix(),
+                    "--milestone",
+                    "M001",
+                ]
+                self.assertEqual(quiet_call(ledger.main, args), 0)
+                self.assertEqual(backlog.read_text().splitlines().count(line), int(existing))
+                projected = backlog.read_text(encoding="utf-8")
+                generated = projected.split("<!-- findings:begin -->", 1)[1]
+                self.assertEqual(generated.count("| M001-H1-P3 |"), 1)
+                self.assertEqual(
+                    projected.split("<!-- findings:begin -->", 1)[0],
+                    outside.split("<!-- findings:begin -->", 1)[0],
+                )
+                self.assertEqual(
+                    projected.split("<!-- findings:end -->", 1)[1],
+                    outside.split("<!-- findings:end -->", 1)[1],
+                )
+                before = backlog.read_bytes()
+                self.assertEqual(
+                    quiet_call(ledger.main, ["--root", str(root), "reconcile"]), 0
+                )
+                self.assertEqual(backlog.read_bytes(), before)
+                # Replaying the report only closes its pending decision; no duplicate finding.
+                self.assertEqual(quiet_call(ledger.main, args), 0)
+                self.assertEqual(backlog.read_bytes(), before)
+
+    def test_holistic_backlog_is_unchanged_when_append_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            append_accepted(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            text = PASS_REPORT.replace("M001-S01 round 1", "M001 round holistic").replace(
+                "| --- | --- | --- | --- |",
+                "| --- | --- | --- | --- |\n| M001-H1-P3 | P3 | carried | polish later |",
+            )
+            report.write_text(text, encoding="utf-8")
+            backlog = root / "05_governance/backlog.md"
+            before = backlog.read_bytes()
+            ledger_before = (root / "05_governance/ledger.jsonl").read_bytes()
+            with mock.patch.object(ledger, "append", side_effect=ValueError("refused")) as append:
+                self.assertEqual(
+                    quiet_call(
+                        ledger.main,
+                        [
+                            "--root",
+                            str(root),
+                            "record",
+                            report.relative_to(root).as_posix(),
+                            "--milestone",
+                            "M001",
+                        ],
+                    ),
+                    2,
+                )
+            append.assert_called_once()
+            self.assertEqual((root / "05_governance/ledger.jsonl").read_bytes(), ledger_before)
+            self.assertEqual(backlog.read_bytes(), before)
+
+    def test_review_prompt_artifact_is_neutral_validated_and_immutable(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/feature.txt").write_text("done\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            verify.run(root, "M001-S01", 10)
+            rel = prompt.review(root, "M001-S01")
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            artifact = events[-1]
+            self.assertEqual(
+                (artifact["ev"], artifact["scope"], artifact["round"], artifact["role"]),
+                ("artifact", "M001-S01", 1, "review_prompt"),
+            )
+            state = ledger.fold(events, roadmap.load(root))["slices"]["M001-S01"]
+            self.assertEqual((state["step"], state["round"]), ("reviewing", 1))
+            (root / rel).write_text("tampered\n", encoding="utf-8")
+            self.assertIn(f"drift: {rel}", ledger.artifact_errors(root, events))
+
+        base = {
+            "schema": "frutlups.ledger/2",
+            "t": "2026-09-02T12:00:00Z",
+            "ev": "artifact",
+            "by": "architect",
+            "scope": "M001-S01",
+            "round": 1,
+            "role": "review_prompt",
+            "path": "prompts/for_review_agent/review.md",
+            "sha": SHA,
+        }
+        for changes in (
+            {"by": "human"},
+            {"scope": "M001", "round": 1},
+            {"role": "holistic_prompt"},
+            {"round": 0},
+        ):
+            with (
+                self.subTest(changes=changes),
+                self.assertRaisesRegex(ValueError, "artifact|round"),
+            ):
+                ledger._validate({**base, **changes})
+
+    def test_out_of_order_artifact_does_not_change_the_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            path = root / "05_governance/ledger.jsonl"
+            rel = "prompts/for_review_agent/review.md"
+            (root / rel).write_text("Real review prompt bytes\n", encoding="utf-8")
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "out of order"):
+                ledger.append(path, {
+                    "ev": "artifact", "by": "architect", "scope": "M001-S01",
+                    "round": 1, "role": "review_prompt", "path": rel,
+                    "sha": common.sha(root / rel),
+                }, roadmap.load(root))
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_append_folds_candidate_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0)
+            rm = roadmap.load(root)
+            path = root / "05_governance/ledger.jsonl"
+            events = ledger.read(path)
+            invalid = events[-1]
+            self.assertEqual(invalid["schema"], "frutlups.ledger/2")
+            self.assertEqual(ledger.artifact_errors(root, events + [invalid]), [])
+            self.assertEqual(ledger.integrity.errors(root, events + [invalid], rm), [])
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "coded out of order"):
+                ledger.append(path, invalid, rm)
+            self.assertEqual(path.read_bytes(), before)
+            with self.assertRaisesRegex(ValueError, "coded out of order"):
+                ledger.fold(events + [invalid], rm)
+
+    def test_blocked_slice_can_be_resolved_with_preserved_context(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/feature.txt").write_text("done\n", encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                ),
+                0,
+            )
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            prompt.review(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.write_text(BLOCKED_REPORT, encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "record",
+                        report.relative_to(root).as_posix(),
+                    ],
+                ),
+                0,
+            )
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "resolve",
+                        "M001-S01",
+                        "--reason",
+                        "owner supplied the decision",
+                        "--authority",
+                        "00_brief/decisions.md",
+                        "--by",
+                        "architect",
+                    ],
+                ),
+                0,
+            )
+            state = ledger.fold(
+                ledger.read(root / "05_governance/ledger.jsonl"), roadmap.load(root)
+            )["slices"]["M001-S01"]
+            self.assertEqual((state["step"], state["round"]), ("fix", 2))
+            self.assertEqual(state["open"], ["M001-S01-R1-F1"])
+            text = (root / prompt.coding(root, "M001-S01")).read_text(encoding="utf-8")
+            self.assertIn("Unblock reason: owner supplied the decision", text)
+            self.assertIn("M001-S01-R1-F1", text)
+
+    def test_unblocked_schema_refuses_for_every_actor_and_direct_fold(self) -> None:
+        rm = roadmap.load(ROOT)
+        for schema, diagnostic in (("frutlups.ledger/1", "unsupported legacy history"),
+                                   ("frutlups.ledger/2", "authority-bound")):
+            for actor in ("frutlups", "human", "architect"):
+                event = {"schema": schema, "t": "2026-09-02T12:00:00Z", "ev": "unblocked",
+                         "by": actor, "slice": "M001-S01", "round": 2, "reason": "x"}
+                with self.subTest(schema=schema, actor=actor):
+                    with self.assertRaisesRegex(ValueError, diagnostic):
+                        ledger._validate(event)
+                    with self.assertRaisesRegex(ValueError, diagnostic):
+                        ledger.fold([event], rm)
+
+    def test_holistic_findings_are_grouped_once_per_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            add_second_slice(root)
+            append_accepted(root, "M001-S01")
+            append_accepted(root, "M001-S02")
+            report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(
+                """# Review: M001 round holistic
+
+## Findings
+| id | severity | disposition | summary |
+| --- | --- | --- | --- |
+| M001-S01-H1-F1 | P1 | open | first issue |
+| M001-S01-H1-F2 | P2 | open | second issue |
+| M001-S02-H1-F1 | P1 | open | third issue |
+
+## Closure Decision
+Objective status: not_achieved
+Objective evidence: Three findings remain open.
+
+## Verdict
+Verdict: needs_work - next: reopen affected slices
+""",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "record",
+                        report.relative_to(root).as_posix(),
+                        "--milestone",
+                        "M001",
+                    ],
+                ),
+                0,
+            )
+            path = root / "05_governance/ledger.jsonl"
+            events = ledger.read(path)
+            self.assertEqual({row["schema"] for row in events}, {"frutlups.ledger/2"})
+            self.assertEqual(sum(row["ev"] == "holistic_reviewed" for row in events), 1)
+            self.assertFalse(any(row["ev"] == "reopened" for row in events))
+            state = ledger.fold(events, roadmap.load(root))
+            for sid, ids in (
+                ("M001-S01", ["M001-S01-H1-F1", "M001-S01-H1-F2"]),
+                ("M001-S02", ["M001-S02-H1-F1"]),
+            ):
+                current = state["slices"][sid]
+                self.assertEqual(current["step"], "fix")
+                self.assertEqual(current["round"], 2)
+                self.assertTrue(current["reopened"])
+                self.assertEqual(current["open"], ids)
+            before = path.read_bytes()
+            self.assertEqual(quiet_call(ledger.main, [
+                "--root", str(root), "record", report.relative_to(root).as_posix(),
+                "--milestone", "M001",
+            ]), 0)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_holistic_pass_records_milestone_done_and_ids_are_strict(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            append_accepted(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(
+                PASS_REPORT.replace("M001-S01 round 1", "M001 round holistic"),
+                encoding="utf-8",
+            )
+            args = [
+                "--root",
+                str(root),
+                "record",
+                report.relative_to(root).as_posix(),
+                "--milestone",
+                "M001",
+            ]
+            self.assertEqual(quiet_call(ledger.main, args), 0)
+            state = ledger.fold(
+                ledger.read(root / "05_governance/ledger.jsonl"), roadmap.load(root)
+            )
+            self.assertEqual(state["milestones_done"], set())
+            self.assertEqual(state["holistic"]["M001"]["step"], "close_pending")
+            self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "close", "M001"]), 0)
+            state = ledger.fold(
+                ledger.read(root / "05_governance/ledger.jsonl"), roadmap.load(root)
+            )
+            self.assertEqual(state["milestones_done"], {"M001"})
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            append_accepted(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            bad = BLOCKED_REPORT.replace("M001-S01 round 1", "M001 round holistic")
+            bad = bad.replace("M001-S01-R1-F1", "H1-F1")
+            report.write_text(bad, encoding="utf-8")
+            args = [
+                "--root",
+                str(root),
+                "record",
+                report.relative_to(root).as_posix(),
+                "--milestone",
+                "M001",
+            ]
+            before = (root / "05_governance/ledger.jsonl").read_bytes()
+            output = io.StringIO()
+            with contextlib.redirect_stderr(output), contextlib.redirect_stdout(output):
+                self.assertEqual(ledger.main(args), 2)
+            self.assertIn("affected slice", output.getvalue())
+            self.assertEqual((root / "05_governance/ledger.jsonl").read_bytes(), before)
+            self.assertFalse(
+                any(
+                    event["ev"] == "reopened"
+                    for event in ledger.read(root / "05_governance/ledger.jsonl")
+                )
+            )
+
+    def test_reopen_cli_advances_an_accepted_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            append_accepted(root, "M001-S01")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "reopen",
+                        "M001-S01",
+                        "--reason",
+                        "regression",
+                        "--by",
+                        "architect",
+                    ],
+                ),
+                0,
+            )
+            state = ledger.fold(
+                ledger.read(root / "05_governance/ledger.jsonl"), roadmap.load(root)
+            )["slices"]["M001-S01"]
+            self.assertEqual((state["step"], state["round"]), ("fix", 2))
+
+    def test_backlog_is_unchanged_when_review_append_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            self.assertEqual(
+                quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0
+            )
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            text = PASS_REPORT.replace(
+                "| --- | --- | --- | --- |",
+                "| --- | --- | --- | --- |\n| M001-S01-R1-P3 | P3 | carried | polish later |",
+            )
+            report.write_text(text, encoding="utf-8")
+            backlog = root / "05_governance/backlog.md"
+            before = backlog.read_bytes()
+            ledger_before = (root / "05_governance/ledger.jsonl").read_bytes()
+            with mock.patch.object(ledger, "append", side_effect=ValueError("refused")) as append:
+                result = quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "record",
+                        report.relative_to(root).as_posix(),
+                    ],
+                )
+            self.assertEqual(result, 2)
+            append.assert_called_once()
+            self.assertEqual((root / "05_governance/ledger.jsonl").read_bytes(), ledger_before)
+            self.assertEqual(backlog.read_bytes(), before)
+
+    def test_check_accepts_product_paths_returned_to_head(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            set_full(root, "raise SystemExit(0)")
+            originals = {
+                "07_app/modified.txt": "original modified\n",
+                "07_app/deleted.txt": "original deleted\n",
+                "07_app/old.txt": "original rename\n",
+            }
+            for rel, text in originals.items():
+                (root / rel).write_text(text, encoding="utf-8")
+            git_init(root)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "start")
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/modified.txt").write_text("changed\n", encoding="utf-8")
+            (root / "07_app/added.txt").write_text("added\n", encoding="utf-8")
+            (root / "07_app/deleted.txt").unlink()
+            (root / "07_app/old.txt").rename(root / "07_app/new.txt")
+            run_git(root, "add", "-A")
+            self.assertEqual(
+                quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]),
+                0,
+            )
+
+            (root / "07_app/modified.txt").write_text(originals["07_app/modified.txt"])
+            (root / "07_app/added.txt").unlink()
+            (root / "07_app/deleted.txt").write_text(originals["07_app/deleted.txt"])
+            (root / "07_app/new.txt").rename(root / "07_app/old.txt")
+            run_git(root, "add", "-A")
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            self.assertEqual(ledger.check(root, roadmap.load(root), events), [])
+            (root / "07_app/modified.txt").write_text("actual drift\n", encoding="utf-8")
+            self.assertIn(
+                "drift: 07_app/modified.txt", ledger.check(root, roadmap.load(root), events)
+            )
+
+
+class AttributionAndPromptTests(unittest.TestCase):
+    def test_holistic_report_paths_are_reserved_across_prompts_and_rounds(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+
+            def accept_round(round_no):
+                prompt.coding(root, "M001-S01")
+                (root / "07_app/feature.txt").write_text(f"round {round_no}\n", encoding="utf-8")
+                self.assertEqual(
+                    quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0
+                )
+                self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+                report = f"05_governance/reviews/m001/M001-S01_r{round_no}_review.md"
+                text = PASS_REPORT.replace("round 1", f"round {round_no}")
+                if round_no == 2:
+                    text = close_findings(root, text, first, "M001-S01-R1-F1")
+                (root / report).write_text(text, encoding="utf-8")
+                self.assertEqual(
+                    quiet_call(ledger.main, ["--root", str(root), "record", report]), 0
+                )
+                self.assertEqual(
+                    quiet_call(
+                        ledger.main, ["--root", str(root), "accept", "M001-S01", "--commit"]
+                    ),
+                    0,
+                )
+
+            accept_round(1)
+            first = "05_governance/reviews/m001/M001_holistic_review.md"
+            second = "05_governance/reviews/m001/M001_holistic_2_review.md"
+            for expected in (first, second):
+                text = (root / prompt.holistic(root, "M001")).read_text(encoding="utf-8")
+                self.assertIn(f"write only `{expected}`", text)
+            report_text = needs_report(1).replace("M001-S01 round 1", "M001 round holistic")
+            (root / first).write_text(report_text, encoding="utf-8")
+            original = (root / first).read_bytes()
+            self.assertEqual(
+                quiet_call(
+                    ledger.main, ["--root", str(root), "record", first, "--milestone", "M001"]
+                ),
+                0,
+            )
+            accept_round(2)
+            # An existing, unrecorded file also occupies its report name.
+            occupied = root / "05_governance/reviews/m001/M001_holistic_3_review.md"
+            occupied.write_text("operator draft\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unrecorded product changes"):
+                prompt.holistic(root, "M001")
+            # Commit only this fixture draft so native integrity permits path allocation.
+            run_git(root, "add", occupied.relative_to(root).as_posix())
+            run_git(root, "commit", "-m", "reserve operator draft")
+            text = (root / prompt.holistic(root, "M001")).read_text(encoding="utf-8")
+            self.assertIn("write only `05_governance/reviews/m001/M001_holistic_4_review.md`", text)
+            self.assertEqual((root / first).read_bytes(), original)
+            self.assertEqual(occupied.read_text(encoding="utf-8"), "operator draft\n")
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            self.assertEqual(ledger.check(root, roadmap.load(root), events), [])
+
+    def test_failed_verification_baselines_known_state_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            set_full(root, "raise SystemExit(3)")
+            git_init(root)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "start")
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/feature.txt").write_text("round one\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            self.assertFalse(verify.run(root, "M001-S01", 10)[0]["ok"])
+            prompt.coding(root, "M001-S01")
+            latest = ledger.read(root / "05_governance/ledger.jsonl")[-1]
+            baseline_paths = {item["path"] for item in latest["baseline"]}
+            self.assertIn("07_app/feature.txt", baseline_paths)
+            self.assertTrue(any(path.endswith("_verification.json") for path in baseline_paths))
+
+    def test_holistic_reopen_baselines_prompt_and_report_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/feature.txt").write_text("done\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            prompt.review(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.write_text(PASS_REPORT, encoding="utf-8")
+            quiet_call(
+                ledger.main,
+                ["--root", str(root), "record", report.relative_to(root).as_posix()],
+            )
+            quiet_call(ledger.main, ["--root", str(root), "accept", "M001-S01", "--commit"])
+            holistic_prompt = prompt.holistic(root, "M001")
+            holistic_report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            text = needs_report(1).replace("M001-S01 round 1", "M001 round holistic")
+            holistic_report.write_text(text, encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "record",
+                        holistic_report.relative_to(root).as_posix(),
+                        "--milestone",
+                        "M001",
+                    ],
+                ),
+                0,
+            )
+            prompt.coding(root, "M001-S01")
+            baseline = ledger.read(root / "05_governance/ledger.jsonl")[-1]["baseline"]
+            paths = {item["path"] for item in baseline}
+            self.assertIn(holistic_prompt, paths)
+            self.assertIn(holistic_report.relative_to(root).as_posix(), paths)
+
+    def test_dirty_prompt_refusal_and_exact_baseline_attribution(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            readme = root / "README.md"
+            readme.write_text("architect edit\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                prompt.coding(root, "M001-S01")
+            self.assertIn("README.md", str(caught.exception))
+            self.assertIn("committed or stashed", str(caught.exception))
+            prompt.coding(root, "M001-S01", True)
+            (root / "07_app/x.txt").write_text("coder\n", encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                ),
+                0,
+            )
+            coded = ledger.read(root / "05_governance/ledger.jsonl")[-1]
+            self.assertEqual([item["path"] for item in coded["changed"]], ["07_app/x.txt"])
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            readme = root / "README.md"
+            readme.write_text("architect edit\n", encoding="utf-8")
+            prompt.coding(root, "M001-S01", True)
+            readme.write_text("changed after prompt\n", encoding="utf-8")
+            before = len(ledger.read(root / "05_governance/ledger.jsonl"))
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                ),
+                2,
+            )
+            self.assertEqual(len(ledger.read(root / "05_governance/ledger.jsonl")), before)
+
+    def test_injected_historical_prompt_is_not_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            injected = root / "prompts/for_coding_agent/999_injected.md"
+            injected.write_text("not a tool artifact\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unknown dirty paths"):
+                prompt.coding(root, "M001-S01")
+
+    def test_foreign_slice_artifacts_are_not_auto_baselined(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            add_second_slice(root)
+            set_full(root, "raise SystemExit(0)")
+            git_init(root)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "start")
+            prompt.coding(root, "M001-S02")
+            (root / "07_app/foreign.txt").write_text("foreign\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S02"])
+            self.assertTrue(verify.run(root, "M001-S02", 10)[0]["ok"])
+            foreign_prompt = prompt.review(root, "M001-S02")
+            with self.assertRaisesRegex(ValueError, "unknown dirty paths") as caught:
+                prompt.coding(root, "M001-S01")
+            self.assertIn(foreign_prompt, str(caught.exception))
+
+    def test_changed_prior_report_is_not_hidden_by_dirty_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            feature = root / "07_app/feature.txt"
+            feature.write_text("round one\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            verify.run(root, "M001-S01", 10)
+            prompt.review(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            needs = PASS_REPORT.replace(
+                "| --- | --- | --- | --- |",
+                "| --- | --- | --- | --- |\n| M001-S01-R1-F1 | P1 | open | correct the behavior |",
+            ).replace(
+                "Verdict: pass - next: accept the slice",
+                "Verdict: needs_work - next: fix the finding",
+            )
+            report.write_text(needs, encoding="utf-8")
+            quiet_call(
+                ledger.main,
+                [
+                    "--root",
+                    str(root),
+                    "record",
+                    report.relative_to(root).as_posix(),
+                ],
+            )
+            report.write_text(needs + "\ntampered before prompt\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "immutable evidence drift"):
+                prompt.coding(root, "M001-S01")
+            report.write_text(needs, encoding="utf-8")
+            prompt.coding(root, "M001-S01")
+            report.write_text(needs + "\ntampered after prompt\n", encoding="utf-8")
+            before = len(ledger.read(root / "05_governance/ledger.jsonl"))
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                ),
+                2,
+            )
+            self.assertEqual(len(ledger.read(root / "05_governance/ledger.jsonl")), before)
+
+    def test_dirty_baseline_collects_every_git_change_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            git_init(root)
+            for rel in ("modified.txt", "deleted.txt", "old.txt"):
+                (root / rel).write_text(rel, encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "seed")
+            (root / "modified.txt").write_text("changed", encoding="utf-8")
+            (root / "deleted.txt").unlink()
+            (root / "old.txt").rename(root / "renamed.txt")
+            (root / "added.txt").write_text("new", encoding="utf-8")
+            run_git(root, "add", "-A")
+            baseline = evidence.prompt_baseline(root, roadmap.load(ROOT), [], "M001-S01", True)
+            kinds = {item["path"]: item["kind"] for item in baseline}
+            self.assertEqual(kinds["modified.txt"], "modified")
+            self.assertEqual(kinds["deleted.txt"], "deleted")
+            self.assertEqual(kinds["renamed.txt"], "renamed")
+            self.assertEqual(kinds["added.txt"], "added")
+
+    def test_review_prompt_embeds_added_file_and_bounded_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            feature = root / "07_app/feature.txt"
+            feature.write_text("visible source\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            text = (root / prompt.review(root, "M001-S01")).read_text(encoding="utf-8")
+            self.assertIn("## Code diff", text)
+            self.assertIn("Added file: 07_app/feature.txt", text)
+            self.assertIn("visible source", text)
+            self.assertIn("Start every finding ID with `M001-S01-`", text)
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            git_init(root)
+            (root / "seed.txt").write_text("seed\n", encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "seed")
+            path = root / "large.txt"
+            path.write_text("x" * 40_000, encoding="utf-8")
+            block = evidence.review_diff(root, evidence.changed_files(root))
+            self.assertIn("Diff truncated at 32 KB", block)
+            self.assertTrue(block.endswith("\n```"))
+            self.assertLessEqual(len(block.encode("utf-8")), 33 * 1024)
+
+    def test_later_review_manifest_is_cumulative_but_diff_is_current(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            for round_no, rel in ((1, "first.txt"), (2, "second.txt")):
+                prompt.coding(root, "M001-S01")
+                (root / "07_app" / rel).write_text(f"round {round_no}\n", encoding="utf-8")
+                quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+                self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+                prompt.review(root, "M001-S01")
+                report = root / f"05_governance/reviews/m001/M001-S01_r{round_no}_review.md"
+                report_text = needs_report(round_no)
+                if round_no == 2:
+                    report_text = close_findings(
+                        root, report_text,
+                        "05_governance/reviews/m001/M001-S01_r1_review.md", "M001-S01-R1-F1",
+                    )
+                report.write_text(report_text, encoding="utf-8")
+                quiet_call(
+                    ledger.main,
+                    ["--root", str(root), "record", report.relative_to(root).as_posix()],
+                )
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/first.txt").unlink()
+            (root / "07_app/third.txt").write_text("round 3\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            text = (root / prompt.review(root, "M001-S01")).read_text(encoding="utf-8")
+            manifest, diff = text.split("## Code diff", 1)
+            self.assertIn("`07_app/first.txt`", manifest)
+            self.assertIn("`07_app/second.txt`", manifest)
+            self.assertIn("`07_app/third.txt`", manifest)
+            for path, kind, origin in (
+                ("first.txt", "deleted", "current round"),
+                ("second.txt", "added", "earlier round"),
+                ("third.txt", "added", "current round"),
+            ):
+                row = next(line for line in manifest.splitlines() if f"`07_app/{path}`" in line)
+                self.assertIn(f"({kind}, sha256 `", row)
+                self.assertTrue(row.endswith(f"{origin})"))
+            self.assertIn("third.txt", diff)
+            self.assertNotIn("second.txt", diff)
+            passing = close_findings(
+                root, PASS_REPORT.replace("round 1", "round 3"),
+                "05_governance/reviews/m001/M001-S01_r2_review.md", "M001-S01-R2-F1",
+            )
+            report = "05_governance/reviews/m001/M001-S01_r3_review.md"
+            (root / report).write_text(passing, encoding="utf-8")
+            self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "record", report]), 0)
+
+    def test_holistic_diff_uses_and_enforces_bounded_per_slice_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            git_init(root)
+            (root / "seed.txt").write_text("seed\n", encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "seed")
+            base = run_git(root, "rev-parse", "HEAD").stdout.strip()
+            paths = []
+            for number in range(65):
+                rel = f"07_app/file_{number:02d}.txt"
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("x\n", encoding="utf-8")
+                paths.append(rel)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "many")
+            bounded = evidence.holistic_diff(root, base, {"M001-S01": paths})
+            self.assertIn("omitted by the bounded evidence gate", bounded)
+            self.assertIn("### M001-S01", bounded)
+            self.assertNotIn("07_app/file_64.txt", bounded)
+            self.assertLessEqual(len(bounded.encode("utf-8")), evidence.DIFF_LIMIT + 20)
+
+            detailed = evidence.holistic_diff(root, base, {"M001-S01": paths[:1]})
+            self.assertIn("### M001-S01", detailed)
+            self.assertLessEqual(len(detailed.encode("utf-8")), evidence.DIFF_LIMIT + 20)
+
+    def test_review_diff_represents_delete_rename_and_binary_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            git_init(root)
+            (root / "gone.txt").write_text("gone\n", encoding="utf-8")
+            (root / "old.txt").write_text("renamed\n", encoding="utf-8")
+            (root / "binary.dat").write_bytes(b"\x00old")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "seed")
+            (root / "gone.txt").unlink()
+            (root / "old.txt").rename(root / "new.txt")
+            (root / "binary.dat").write_bytes(b"\x00new")
+            run_git(root, "add", "-A")
+            block = evidence.review_diff(root, evidence.changed_files(root))
+            self.assertIn("gone.txt", block)
+            self.assertIn("new.txt", block)
+            self.assertIn("Binary files", block)
+
+    def test_holistic_prompt_contains_accepted_range_stat_and_id_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            (root / "07_app/feature.txt").write_text("done\n", encoding="utf-8")
+            quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"])
+            receipt, _ = verify.run(root, "M001-S01", 10)
+            prompt.review(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.write_text(PASS_REPORT, encoding="utf-8")
+            quiet_call(
+                ledger.main,
+                [
+                    "--root",
+                    str(root),
+                    "record",
+                    report.relative_to(root).as_posix(),
+                ],
+            )
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "accept",
+                        "M001-S01",
+                        "--commit",
+                    ],
+                ),
+                0,
+            )
+            text = (root / prompt.holistic(root, "M001")).read_text(encoding="utf-8")
+            self.assertIn(f"git diff {receipt['base_commit']}..HEAD --stat", text)
+            self.assertIn("### M001-S01", text)
+            self.assertIn("Every P0-P2 finding ID must start with the affected slice ID", text)
+            artifact = ledger.read(root / "05_governance/ledger.jsonl")[-1]
+            self.assertEqual(
+                (artifact["ev"], artifact["scope"], artifact["round"], artifact["role"]),
+                ("artifact", "M001", "holistic", "holistic_prompt"),
+            )
+
+
+class CompatibilityAndSafetyTests(unittest.TestCase):
+    def test_front_repo_projection_digest_remains_raw(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / "projection.txt"
+            path.write_bytes(b"first\r\nsecond\r\n")
+            self.assertNotEqual(front_repo.digest(path), common.sha(path))
+
+    def test_cli_paths_accept_backslashes_and_store_posix(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            self.assertEqual(quiet_call(prompt.main, [
+                "M001-S01", "--root", str(root),
+            ]), 0)
+            notes = root / "05_governance/reviews/m001/coder.md"
+            notes.parent.mkdir(parents=True, exist_ok=True)
+            notes.write_text("notes\n", encoding="utf-8")
+            (root / "07_app/x.txt").write_text("x\n", encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                        "--notes",
+                        r"05_governance\reviews\m001\coder.md",
+                    ],
+                ),
+                0,
+            )
+            verify.run(root, "M001-S01", 10)
+            prompt.review(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001-S01_r1_review.md"
+            report.write_text(PASS_REPORT, encoding="utf-8")
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "record",
+                        r".\05_governance\reviews\m001\M001-S01_r1_review.md",
+                    ],
+                ),
+                0,
+            )
+            self.assertEqual(
+                quiet_call(
+                    ledger.main,
+                    [
+                        "--root",
+                        str(root),
+                        "index",
+                        "--output",
+                        r"05_governance\reviews\INDEX.md",
+                    ],
+                ),
+                0,
+            )
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            self.assertEqual(events[0]["path"], "prompts/for_coding_agent/001_M001-S01_r1.md")
+            self.assertEqual({row["schema"] for row in events}, {"frutlups.ledger/2"})
+            self.assertEqual(events[1]["notes_path"], "05_governance/reviews/m001/coder.md")
+            self.assertTrue((root / "05_governance/reviews/INDEX.md").is_file())
+            self.assertEqual(quiet_call(roadmap.main, ["next", "--root", str(root)]), 0)
+
+    def test_cli_path_normalization_keeps_containment_strict(self) -> None:
+        self.assertEqual(common.cli_rel(r"folder\file.md"), "folder/file.md")
+        self.assertEqual(common.cli_rel(r".\folder\file.md"), "folder/file.md")
+        self.assertEqual(common.cli_rel("./folder/file.md"), "folder/file.md")
+        for value in (
+            r"..\escape.md",
+            r".\..\escape.md",
+            "././escape.md",
+            r"C:\absolute.md",
+            r"\\server\share\x.md",
+            "/absolute.md",
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "unsafe"):
+                common.cli_rel(value)
+
+    def test_git_identity_is_checked_before_accept_event(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+            prompt.coding(root, "M001-S01")
+            self.assertEqual(
+                quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0
+            )
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            rel = "05_governance/reviews/pass.md"
+            (root / rel).write_text(PASS_REPORT, encoding="utf-8")
+            self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "record", rel]), 0)
+            ledger_path = root / "05_governance/ledger.jsonl"
+            run_git(root, "config", "user.email", "")
+            run_git(root, "config", "user.name", "")
+            before = ledger_path.read_bytes()
+            index_before = common.git(root, "ls-files", "--stage", "-v", "-z").stdout
+            head_before = common.git(root, "rev-parse", "HEAD").stdout
+            product_before = {
+                p.relative_to(root).as_posix(): p.read_bytes()
+                for p in (root / "07_app").rglob("*") if p.is_file()
+            }
+            artifacts_before = {
+                p.relative_to(root).as_posix(): p.read_bytes()
+                for p in (root / "05_governance/reviews").rglob("*") if p.is_file()
+            }
+            output = io.StringIO()
+            with contextlib.redirect_stderr(output), contextlib.redirect_stdout(output):
+                self.assertEqual(
+                    ledger.main(["--root", str(root), "accept", "M001-S01", "--commit"]), 2
+                )
+            self.assertIn("git user.email is not configured", output.getvalue())
+            self.assertEqual(common.git(root, "ls-files", "--stage", "-v", "-z").stdout,
+                             index_before)
+            self.assertEqual(common.git(root, "rev-parse", "HEAD").stdout, head_before)
+            self.assertEqual({
+                p.relative_to(root).as_posix(): p.read_bytes()
+                for p in (root / "07_app").rglob("*") if p.is_file()
+            }, product_before)
+            self.assertEqual({
+                p.relative_to(root).as_posix(): p.read_bytes()
+                for p in (root / "05_governance/reviews").rglob("*") if p.is_file()
+            }, artifacts_before)
+            self.assertEqual(ledger_path.read_bytes(), before)
+
+    def test_scrubber_preserves_urls_and_removes_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            value = b"https://example.test/a http://other.test C:\\secret\\x /tmp/private"
+            scrubbed = verify._scrub(value, root, {})
+            self.assertIn("https://example.test/a", scrubbed)
+            self.assertIn("http://other.test", scrubbed)
+            self.assertNotIn("C:\\secret", scrubbed)
+            self.assertNotIn("/tmp/private", scrubbed)
+
+    def test_empty_front_repo_manifest_has_actionable_error(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / "front_repo.toml"
+            path.write_text("[settings]\n[ignore]\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, r"front_repo\.toml.*\[\[files\]\].*\[\[directories\]\].*add one"
+            ):
+                front_repo.load_manifest(path)
+
+    def test_hermetic_verifier_fails_closed_and_stops_on_failure(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(hermetic.run([]), 2)
+        self.assertIn("not configured", stderr.getvalue())
+        with tempfile.TemporaryDirectory() as name:
+            base = Path(name)
+            project = base / "project"
+            project.mkdir()
+            (project / "pkg").mkdir()
+            observed = base / "observed.json"
+            code = (
+                "import json,os,pathlib,sys; "
+                "pathlib.Path(sys.argv[1]).write_text(json.dumps({"
+                "'cwd':os.getcwd(),'TEMP':os.environ['TEMP'],'TMP':os.environ['TMP'],"
+                "'scratch':os.environ['VERIFICATION_SCRATCH'],"
+                "'root':os.environ['PROJECT_ROOT'],"
+                "'py':os.environ['PYTHONDONTWRITEBYTECODE']}))"
+            )
+            self.assertEqual(
+                hermetic.run([[sys.executable, "-c", code, str(observed)]], project),
+                0,
+            )
+            data = json.loads(observed.read_text(encoding="utf-8"))
+            self.assertEqual(Path(data["cwd"]), project.resolve())
+            self.assertEqual(data["TEMP"], data["TMP"])
+            self.assertEqual(data["TEMP"], data["scratch"])
+            self.assertEqual(Path(data["root"]), project.resolve())
+            self.assertEqual(data["py"], "1")
+            self.assertFalse(Path(data["TEMP"]).is_relative_to(project))
+            self.assertEqual(
+                hermetic.run(
+                    [{"argv": [sys.executable, "-c", code, str(observed)], "cwd": "pkg"}],
+                    project,
+                ),
+                0,
+            )
+            self.assertEqual(Path(json.loads(observed.read_text())["cwd"]), project / "pkg")
+            for value in ("missing", "../escape", "/absolute", "./pkg", None):
+                with self.subTest(cwd=value), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(
+                        hermetic.run(
+                            [{"argv": [sys.executable, "-c", "pass"], "cwd": value}], project
+                        ),
+                        2,
+                    )
+            marker = base / "should-not-exist"
+            commands = [
+                [sys.executable, "-c", "raise SystemExit(7)"],
+                [
+                    sys.executable,
+                    "-c",
+                    "import pathlib,sys;pathlib.Path(sys.argv[1]).touch()",
+                    str(marker),
+                ],
+            ]
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                self.assertEqual(hermetic.run(commands, project), 7)
+            self.assertIn("command 1 failed", stderr.getvalue())
+            self.assertIn("exit=7", stderr.getvalue())
+            self.assertIn(str(project.resolve()), stderr.getvalue())
+            self.assertFalse(marker.exists())
+            self.assertEqual([path.name for path in project.iterdir()], ["pkg"])
+
+    def test_doctrine_and_intake_contracts_are_present(self) -> None:
+        coding = (ROOT / "prompts/templates/coding_prompt.md").read_text(encoding="utf-8")
+        self.assertIn("one short paragraph", coding)
+        self.assertIn("exactly four lists", coding)
+        review = (ROOT / "prompts/templates/review_prompt.md").read_text(encoding="utf-8")
+        self.assertIn("## Code diff", review)
+        self.assertIn("{{finding_id_rule}}", review)
+        intake = (ROOT / "00_brief/intake.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Project horizon",
+            "Admitted milestones",
+            "Current run boundary",
+            "Disposable exact-toolchain slice",
+            "user-path smoke test",
+            "Operational budgets",
+        ):
+            self.assertIn(phrase, intake)
+        doctrine = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("one short paragraph", doctrine)
+        self.assertIn("ledger.py resolve", doctrine)
+        self.assertNotIn("ledger.py unblock", doctrine)
+        operating = (ROOT / "docs/operating.md").read_text(encoding="utf-8")
+        self.assertIn("--allow-dirty", operating)
+        self.assertIn("fails with exit 2", operating)
+
+
+if __name__ == "__main__":
+    unittest.main()

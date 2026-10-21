@@ -1,0 +1,170 @@
+{
+  "fields": [
+    {
+      "field": "title",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "objective",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "acceptance",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "non_goals",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "read_first",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "allowed_prefixes",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "ledger._coded -> evidence.fence",
+        "_integrity.errors -> frozen coded fence"
+      ],
+      "semantics": "Actual current/retained changed-path admission uses issued values.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "forbidden",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "ledger._coded -> evidence.fence",
+        "_integrity.errors -> frozen coded fence"
+      ],
+      "semantics": "Actual current/retained changed-path admission uses issued values.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "focused",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "full",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "verify.run -> _integrity.envelope",
+        "_integrity._receipt"
+      ],
+      "semantics": "Frozen full argv, runtime declaration, timeout or observation consumed by native verifier.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "runtime",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "verify.run -> _integrity.envelope",
+        "_integrity._receipt"
+      ],
+      "semantics": "Frozen full argv, runtime declaration, timeout or observation consumed by native verifier.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "timeout_seconds",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "verify.run -> _integrity.envelope"
+      ],
+      "semantics": "Frozen full argv, runtime declaration, timeout or observation consumed by native verifier.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "observation",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer",
+        "verify.run -> _integrity.envelope",
+        "_integrity._receipt"
+      ],
+      "semantics": "Frozen full argv, runtime declaration, timeout or observation consumed by native verifier.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "notes",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    },
+    {
+      "field": "memory",
+      "producer": "prompt.coding -> _resumes_contract / _envelope / validated prior envelope",
+      "consumers": [
+        "prompt._values -> coding renderer",
+        "prompt._frozen -> _review_values -> review renderer"
+      ],
+      "semantics": "Task instruction rendered for coder and reviewer; not independently executed by ledger.",
+      "exact_field_assertions": "ContractSelectionTests.fields; all issuance cases and narrowed actual verification/review capture",
+      "runner_status": "pending F adoption; see runner_behavior_delta.md"
+    }
+  ],
+  "limits": "All 14 travel in the immutable envelope; only appropriate subsets are machine-executed. Granted-budget admission is unchanged and separate."
+}

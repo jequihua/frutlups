@@ -1,0 +1,168 @@
+{
+  "purpose": "Exact immutable historical comparison test data; not a full runnable controller or product adoption",
+  "schema": "frutlups.test-fixture/1",
+  "F_commit": "153f108e71c7565c55c4089d8b686d4729d723dd",
+  "archive": {
+    "path": "historical_eligibility.tar",
+    "bytes": 419840,
+    "raw_sha256": "ac9d88476b016822d71fe7d08ef6370083ccc33426d156ffc77ea4423c8d4030"
+  },
+  "members": [
+    {
+      "path": "02_analysis/dec03_i_design/r4/consumption.md",
+      "mode": "100644",
+      "bytes": 11371,
+      "raw_sha256": "8dba0c4753bae924396c07671fed51762e9f8353c0ee2949abb5dc2796816087"
+    },
+    {
+      "path": "02_analysis/dec03_i_design/r4/example_assessment.json",
+      "mode": "100644",
+      "bytes": 3988,
+      "raw_sha256": "edb9ae279d75af1d3a6b8acb15ec044dd685a55f0861befc835ac24afd2b0683"
+    },
+    {
+      "path": "05_governance/ledger.jsonl",
+      "mode": "100644",
+      "bytes": 235650,
+      "raw_sha256": "35b1ad778cf2df5de42145b96decab31408f64856663c5685febf02159e65932"
+    },
+    {
+      "path": "05_governance/reviews/m002/M002-S03_r3_architect_notes.md",
+      "mode": "100644",
+      "bytes": 2790,
+      "raw_sha256": "5e11083d07a026ed274fd637b1df2426e8899b0e6ae3a25cab5ea77a0bb82c7a"
+    },
+    {
+      "path": "05_governance/reviews/m002/M002-S03_r3_envelope.json",
+      "mode": "100644",
+      "bytes": 15001,
+      "raw_sha256": "8186c8bc9803cbcde49e91cd3f15df8d66fc85549c56d444437850e63537b6bd"
+    },
+    {
+      "path": "05_governance/reviews/m002/M002-S03_r3_manifest_ecc2c3639cb87026.json",
+      "mode": "100644",
+      "bytes": 1268,
+      "raw_sha256": "ecc2c3639cb87026808133e95090ab61677bfc23fe27f2fe0345b93a595c6f53"
+    },
+    {
+      "path": "05_governance/reviews/m002/M002-S03_r3_review.md",
+      "mode": "100644",
+      "bytes": 4878,
+      "raw_sha256": "6c1a8e08ffd8c349f1b01ee9cd0cf87e70cb23282301bffee4234a655823a591"
+    },
+    {
+      "path": "05_governance/reviews/m002/M002-S03_r3_verification.json",
+      "mode": "100644",
+      "bytes": 3291,
+      "raw_sha256": "976814adc5e46fcc52f9be7877d8cf962ee8fda3d9e09831eb8f232c132091a5"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S01_r4_envelope.json",
+      "mode": "100644",
+      "bytes": 13712,
+      "raw_sha256": "b7b9aecf67085b241e217e4cf90595b3f281a05be2fc20da01fb9e53f0d70283"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S01_r4_manifest_ebcf362b4d8e2089.json",
+      "mode": "100644",
+      "bytes": 1877,
+      "raw_sha256": "ebcf362b4d8e2089c7eb2e061ec941c0d2994c29c87cc32c7630b1fd10171681"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S01_r4_retained_candidate_notes.md",
+      "mode": "100644",
+      "bytes": 3314,
+      "raw_sha256": "b2a25722fe6219504bd2904b79931729c8f2fc7269339224be515fde8318f50b"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S01_r4_review.md",
+      "mode": "100644",
+      "bytes": 8640,
+      "raw_sha256": "5bd6c277fb319d7b68d972f57c0598018f93408e34611c1eba8f397d8414c005"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S01_r4_verification.json",
+      "mode": "100644",
+      "bytes": 3623,
+      "raw_sha256": "1bbee2c769633622dffbbaa062f404c07c1b8f4109517a3e592d1f275ea11642"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S03_r4_continuation_notes.md",
+      "mode": "100644",
+      "bytes": 3705,
+      "raw_sha256": "cf5d374039945fff8280a7a780f96c838d51ee00a8d9d76bd0994ca74adb4ca5"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S03_r4_envelope.json",
+      "mode": "100644",
+      "bytes": 13211,
+      "raw_sha256": "00ceb5626e40420a1de8fc1e6e4609f6ffcf6dcc24317c960175c31162723b6b"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S03_r4_manifest_b4b9f1f5e810ef3e.json",
+      "mode": "100644",
+      "bytes": 1144,
+      "raw_sha256": "b4b9f1f5e810ef3eb37497490da11d489064679e96e4a7d05ed765da516b4f93"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S03_r4_review.md",
+      "mode": "100644",
+      "bytes": 3456,
+      "raw_sha256": "e7afc6cf3767f8c90ccedfc6c8ad4b60a8114a6b0daa5d4ae3894eb05f33768e"
+    },
+    {
+      "path": "05_governance/reviews/m004/M004-S03_r4_verification.json",
+      "mode": "100644",
+      "bytes": 5289,
+      "raw_sha256": "e3d852ca9ad614e56a70c63de9f5bb4d00fb0527af7429d7f554965ed461e738"
+    },
+    {
+      "path": "prompts/for_coding_agent/018_M002-S03_r3.md",
+      "mode": "100644",
+      "bytes": 15162,
+      "raw_sha256": "813dec1bf25c0e82f40e944755931c1d696d1bfe7ff21aafcd3aa501c8e40073"
+    },
+    {
+      "path": "prompts/for_coding_agent/034_M004-S01_r4.md",
+      "mode": "100644",
+      "bytes": 13801,
+      "raw_sha256": "11ed8b6652214b690ecd51f2a1e2df5ce13f6ce5efd991a22bb7ed79bbd0e3ec"
+    },
+    {
+      "path": "prompts/for_coding_agent/042_M004-S03_r4.md",
+      "mode": "100644",
+      "bytes": 13332,
+      "raw_sha256": "ac8837e436fb9321bdebaae648142b8805697919a118effde36752d6b6c58d1a"
+    },
+    {
+      "path": "questions/answered/Q004_M002_verification_deadline.md",
+      "mode": "100644",
+      "bytes": 3809,
+      "raw_sha256": "89799578b6d9c8b4b2a9e8b2ce82b47aa897048e0c7f17fd87993c202666e617"
+    },
+    {
+      "path": "questions/answered/Q010_M004_verification_deadline.md",
+      "mode": "100644",
+      "bytes": 4327,
+      "raw_sha256": "4dc0d2c4659d8a0b36943cd31558cd9a6522339108d9d090cf31c2edb86c89f6"
+    },
+    {
+      "path": "questions/answered/Q014_M004_remaining_verification_budget.md",
+      "mode": "100644",
+      "bytes": 3755,
+      "raw_sha256": "e03c3dac8a3edebcaee6c56eeb5f86af6130530f9c89154957513b2a79417290"
+    },
+    {
+      "path": "questions/answered/Q015_M004_S03_awake_verification.md",
+      "mode": "100644",
+      "bytes": 3587,
+      "raw_sha256": "50675fe895ab4a37ccdbd3919efd84f4651bc6ab253333a387cc5ba955b3a037"
+    }
+  ],
+  "assessment_path": "02_analysis/dec03_i_design/r4/example_assessment.json",
+  "prefix": {
+    "bytes": 235650,
+    "raw_sha256": "35b1ad778cf2df5de42145b96decab31408f64856663c5685febf02159e65932"
+  },
+  "limits": "Source evidence only; normal runtime history validation remains mandatory. Synthetic complete projects qualify the real owned route."
+}

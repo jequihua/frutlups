@@ -1,0 +1,12 @@
+[
+  ["below", null], ["at", null], ["above", "output"],
+  ["multibyte", null], ["eof-settled", null], ["malformed", "output"],
+  ["bom", "output"], ["nonfinite-json", "output"],
+  ["invalid-utf8", "output"], ["partial-eof", "output"],
+  ["oversized-retry", "output"], ["oversized-aggregate-retry", "output"],
+  ["late-message-missing-markers", "output"], ["late-message-with-markers", "output"],
+  ["oversized-eof", "output"], ["failed-retry", "transport"],
+  ["recovered-retry", null], ["recovered-helper", null],
+  ["agent-end-only", "output"], ["later-start", "output"],
+  ["aggregate-default", "output"], ["aggregate-custom", null]
+]

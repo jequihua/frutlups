@@ -181,3 +181,56 @@ def test_unrelated_code_block_does_not_change_report(fenced: bool) -> None:
     reply = f"```markdown\n{report}```\n" if fenced else report
 
     assert parse("```text\nSome context.\n```\n" + reply) == parse(report)
+
+
+def _native_update_report():
+    return _report().replace("## Closure Decision", (
+        "## Finding updates\n| source | sha | id | disposition | related |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        f"| reviews/original.md | {'a' * 64} | OLD | closed_by_review | RELATED |\n\n"
+        "## Closure Decision"))
+
+
+def test_native_update_fields_and_autonomous_waiver_refusal():
+    from frutlups.verdict import autonomous_slice
+    body = _native_update_report()
+    parsed = autonomous_slice(body, "M001-S01", 1)
+    assert len(parsed.updates) == 1
+    row = parsed.updates[0]
+    assert row.source == "reviews/original.md"
+    assert row.sha == "a" * 64
+    assert row.id == "OLD"
+    assert row.disposition == "closed_by_review"
+    assert row.related == ("RELATED",)
+    with pytest.raises(VerdictError, match="autonomous seats cannot grant human waivers"):
+        autonomous_slice(body.replace("closed_by_review", "waived_by_human"), "M001-S01", 1)
+    # Every parser entry now uses the same native update grammar.
+    assert parse(body).updates == parsed.updates
+
+
+@pytest.mark.parametrize("old,new,message", [
+    ("| source | sha | id | disposition | related |", "| path | sha | id | disposition | related |", "invalid Finding updates table"),
+    ("| --- | --- | --- | --- | --- |", "| -- | --- | --- | --- | --- |", "invalid Finding updates table"),
+    ("reviews/original.md", "../original.md", "relative"),
+    ("a" * 64, "A" * 64, "invalid finding update identity/disposition"),
+    ("| OLD |", "| |", "invalid finding update identity/disposition"),
+    ("closed_by_review", "closed", "invalid finding update identity/disposition"),
+    ("| RELATED |", "| RELATED,RELATED |", "invalid related finding IDs"),
+    ("| RELATED |", "| RELATED, |", "invalid related finding IDs"),
+    ("| RELATED |", "| |", "invalid related finding IDs"),
+    ("## Finding updates", "## Finding updates\n## Finding updates", "duplicate Finding updates heading"),
+])
+def test_native_malformed_updates_reach_grammar_guard(old, new, message):
+    with pytest.raises(VerdictError, match=message):
+        parse(_native_update_report().replace(old, new), native=True)
+
+
+def test_native_duplicate_update_and_heading_placement():
+    body = _native_update_report()
+    row = next(line for line in body.splitlines() if line.startswith("| reviews/"))
+    with pytest.raises(VerdictError, match="contradictory or duplicate finding update"):
+        parse(body.replace(row, row + "\n" + row), native=True)
+    body = body.replace("## Finding updates", "## Other")
+    for anchor in ("## Findings", "## Verdict"):
+        with pytest.raises(VerdictError, match="must follow Findings and precede Closure Decision"):
+            parse(body.replace(anchor, "## Finding updates\n" + anchor), native=True)

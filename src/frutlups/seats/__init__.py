@@ -9,8 +9,13 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
+from frutlups.config import DEFAULT_PI_RECORD_BYTES
+
 if TYPE_CHECKING:
     from frutlups.config import Config
+
+
+FINAL_TEXT_CAP = 1024 * 1024
 
 
 class Role(StrEnum):
@@ -43,6 +48,7 @@ class Job:
     timeout: float
     expected_notes_path: str | None
     memory_enabled: bool = False
+    pi_record_bytes: int = DEFAULT_PI_RECORD_BYTES
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,9 @@ class JobResult:
     stdout_path: Path
     stderr_path: Path
     diagnostic: str | None
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
+    usage_completeness: Literal["complete", "partial", "unknown"] = "unknown"
 
 
 class Seat(Protocol):
@@ -98,7 +107,7 @@ def result_boundary(run):
             return JobResult(
                 "failed", FailureClass.output, None, None, 0, None, None, None,
                 None, directory / "stdout", directory / "stderr",
-                f"{type(exc).__name__}: {exc}",
+                f"{type(exc).__name__}: {exc}"[:2048],
             )
     return guarded
 
