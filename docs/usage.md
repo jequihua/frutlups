@@ -1,8 +1,8 @@
-# Usage accounting and selected runtime
+# Usage and cost reporting
 
-This note describes what `frutlups status --usage` reports and which runtime
-behavior has been observed. It is not an invoice, a provider bill or a record
-of helper agents.
+Run `frutlups status --usage` from your project, adding `--json` for structured
+output. It reports durable totals, not an invoice, a provider bill or a record
+of individual helper agents.
 
 ## Fields
 
@@ -61,40 +61,23 @@ Totals come only from the validated native ledger:
 Local job files under `local_state/frutlups/jobs` are never read for totals.
 Malformed history is refused before any usage row is printed.
 
-## Restart
+## Restart and validation
 
-Status is read-only. A fresh process after a restart rebuilds the same rows
-from durable history, even when local job results are missing or misleading.
-`tests/test_usage_v2.py` checks this with real fresh-process `status` runs. It
-also checks that the ledger, the workspace witness and the job directory stay
-unchanged, that the job store is never opened or listed, and that a malformed
-ledger line is refused.
+Status is read-only and rebuilds totals from durable history after a restart.
+The accounting calculation does not use local job-result totals, but the status
+command's integrity validation can read bound evidence from job storage. Preserve
+that evidence; missing or changed bindings can cause refusal before totals print.
 
-## Selected runtime evidence
+## Costs and coverage
 
-`tests/test_runtime_v2.py` runs a private native slice with a
-`project.local.toml` selector. The selected runtime identity is bound to the
-coder, reviewer and verification attempts and matches the verification
-receipt. A literal `python` at the start of the verification command runs the
-selected launcher, while the receipt keeps the declared argv. A non-Python
-command (`git rev-parse`) runs unchanged.
+Subscription accounts may report API-equivalent estimates. These are not bills,
+remaining subscription quota or an enforced dollar cap. Unknown cost is not free
+usage. Check the provider's own account controls before starting work.
 
-Two launchers of one interpreter were observed: the project venv and its base
-executable, both CPython 3.14.3 on Windows. They are not two Python versions.
-The base launcher was observed at the verifier's argv-substitution boundary
-only. On the qualification host it lacks the template checker's PyYAML, so a
-full private run with it stops at the project checker. That path is excluded,
-not inferred.
+Pi's session statistics can omit partial delegation spend that frutlups retains.
+Claude aggregate token selection is independent of cost completeness and main-result
+success. See [adapter accounting](adapters.md#usage).
 
-## Not qualified here
-
-- Installed wheel, live providers and real CLI usage records. Public `run` and
-  `preflight` now execute offline with fake seats
-  ([public_execution.md](public_execution.md)); that is not installed or live proof.
-- Other Python versions, the declared minimum, POSIX, symlinked launchers and
-  sleep/resume.
-- Pi's own session statistics can omit partial delegation spend that frutlups
-  keeps through `details.usage`
-  ([adapter_compatibility.md](adapter_compatibility.md)).
-- Helper-level accounting: the seat's main agent owns its helpers; frutlups
-  records one aggregate per attempt.
+frutlups records one aggregate per main attempt; it does not promise complete
+helper-level accounting. For the installed and live observations and platform
+limits, see [release evidence](release_evidence.md).
