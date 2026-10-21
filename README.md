@@ -1,6 +1,6 @@
 # frutlups
 
-frutlups 0.4.1 is the optional autonomous runner for native `/2` projects made from
+frutlups 0.4.1 is the optional autonomous runner for projects made from
 the agentic project template, final export T711bce0
 (`711bce067eb0b3d05abf8cdec54f3cc812f62a5d`). You never need it for manual
 operation: the template's own scripts run the whole loop without frutlups installed.
@@ -12,12 +12,9 @@ configuration, operating rules, evidence, exclusions and upgrade notes.
 
 ## Compatibility
 
-- **Native `/2` only.** Legacy roadmap schemas, ledger prefixes, mixed histories and
-  receipts are refused before any effect. Do not downgrade or bypass the schema to make
-  a runner proceed; continue legacy projects with their pinned tools.
-- **frutlups 0.3.x does not run `/2` projects.** The T711bce0 export's own documents
-  were written before 0.4.x and still say no compatible runner has been released.
-  The qualified pair is recorded in the [release guide](docs/release.md).
+- **Supported template.** Use the final T711bce0 export with frutlups 0.4.1.
+  The tested pairing and upgrade guidance are recorded in the
+  [release guide](docs/release.md).
 - **Manual and runner operation interoperate.** You may hand a project from the runner
   to the manual scripts and back. Reservations, charges and unresolved-work guards
   persist across both.
@@ -149,7 +146,7 @@ refusals and stop reasons. See [public execution](docs/public_execution.md).
 
 ## Release 0.4.0 (superseded)
 
-- 0.4.0 enabled public native `/2` execution through the owned checker, recovery and
+- 0.4.0 enabled public execution through the owned checker, recovery and
   typed writers.
 - Its installed exact-pair offline qualification is in
   [paired qualification](docs/paired_qualification.md).
