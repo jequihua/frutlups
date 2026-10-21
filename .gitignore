@@ -44,3 +44,19 @@ temp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Keep the manifest-declared scaffold README in the legacy conformance fixture.
+!tests/fixtures/v4_project/local_state/
+!tests/fixtures/v4_project/local_state/README.md
+
+# Keep the exact new export member visible to Git.
+!tests/fixtures/v2_project/local_state/
+!tests/fixtures/v2_project/local_state/README.md
+
+# Preserve only the declared development scaffold member.
+!tests/fixtures/v5_development/local_state/
+!tests/fixtures/v5_development/local_state/README.md
+
+# Preserve only the declared final export scaffold member.
+!tests/fixtures/v5_final/project/local_state/
+!tests/fixtures/v5_final/project/local_state/README.md
