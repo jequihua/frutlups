@@ -250,14 +250,14 @@ for name, expected in manifest['files'].items():
     assert hashlib.sha256(data).hexdigest() == expected, name
 print('manifest files:', len(manifest['files']))
 from importlib.metadata import version
-assert version('frutlups') == '0.4.1'
+assert version('frutlups') == '0.4.2'
 from frutlups.cli import main
 sys.argv = ['frutlups', '--help']
 main()
 """
     result = command(scratch, sys.executable, "-I", "-B", "-c", check,
                      str(installed), str(exported), ok=False)
-    # 0.4.1 treats top-level --help as usage error; preserve this CLI behavior.
+    # 0.4.2 treats top-level --help as usage error; preserve this CLI behavior.
     assert result.returncode == 2
     assert result.stdout.decode().splitlines() == [
         "manifest files: 54", "usage: frutlups {preflight,run,status}",

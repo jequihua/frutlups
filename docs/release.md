@@ -1,6 +1,6 @@
-# Install and run frutlups 0.4.1
+# Install and run frutlups 0.4.2
 
-Download the published [v0.4.1 release](https://github.com/jequihua/frutlups/releases/tag/v0.4.1).
+Download the [v0.4.2 release](https://github.com/jequihua/frutlups/releases/tag/v0.4.2).
 Use it with the qualified [template 5.0.0 export](../tests/fixtures/v5_final/template-5.0.0.tar).
 Follow the exported template's README to create your project and configure its
 verification command before enabling autonomous work.
@@ -14,20 +14,25 @@ between manual template operation and the runner.
 The package metadata declares Python >=3.11, but Python 3.11 is expected to fail
 because some evidence checks use `Path.is_junction`. Other Python versions and
 operating systems have not been qualified. Two-hour endurance, sleep/resume,
-arbitrary-scale delegation and hostile-helper confinement are also unqualified.
-The successful live workflow used both 0.4.0 and 0.4.1; it is not evidence that
-every live action was repeated on 0.4.1.
+power-loss durability, arbitrary-scale delegation and hostile-helper confinement
+are also unqualified. The exact 0.4.2/template pair completed its live pipeline
+with an operator-assisted holistic handoff and a dispatch-free fresh restart.
+This does not establish uninterrupted autonomous holistic completion. Inherited
+checks retain their original version attribution.
 
 Pi 1.0.2 (Node 24.14.0) and Claude Code 2.1.289 were the recorded live tool versions.
 These are dated observations, not guarantees about later CLI versions or account
-access. See [models and delegation](adapters.md) and [release evidence](release_evidence.md).
+access. See [models and delegation](adapters.md) and [0.4.2 evidence](release_evidence_0_4_2.md).
 
 ## Install the frozen wheel
 
 Use a new working directory outside your project. Download
-[frutlups-0.4.1-py3-none-any.whl](https://github.com/jequihua/frutlups/releases/download/v0.4.1/frutlups-0.4.1-py3-none-any.whl)
+[frutlups-0.4.2-py3-none-any.whl](https://github.com/jequihua/frutlups/releases/download/v0.4.2/frutlups-0.4.2-py3-none-any.whl)
 into it. The release also supplies
-[SHA256SUMS](https://github.com/jequihua/frutlups/releases/download/v0.4.1/SHA256SUMS).
+[SHA256SUMS](https://github.com/jequihua/frutlups/releases/download/v0.4.2/SHA256SUMS).
+
+The frozen wheel is 131332 bytes. Its raw SHA-256 is
+`a2fd180d53918c641f0f3dc5b1e891909ccf65a6eaef6ffe6285b4e92275c787`.
 
 For the qualified Windows setup, use PowerShell and an installed 64-bit Python
 3.14.3. The `py` launcher below must select that interpreter:
@@ -43,14 +48,14 @@ install or download frutlups from PyPI. Check both local files before installati
 
 ```powershell
 $expected = @{
-    'frutlups-0.4.1-py3-none-any.whl' = '68ad38d5d16797eedf7527167ce236ec771f343f7f928edaec84e9fd848090ac'
+    'frutlups-0.4.2-py3-none-any.whl' = 'a2fd180d53918c641f0f3dc5b1e891909ccf65a6eaef6ffe6285b4e92275c787'
     'pyyaml-6.0.3-cp314-cp314-win_amd64.whl' = '4a2e8cebe2ff6ab7d1050ecd59c25d4c8bd7e6f400f5f82b96557ac0abafd0ac'
 }
 foreach ($file in $expected.Keys) {
     $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
     if ($actual -ne $expected[$file]) { throw "Checksum mismatch: $file" }
 }
-.\.venv-frutlups\Scripts\python.exe -m pip install --no-index --no-deps .\frutlups-0.4.1-py3-none-any.whl .\pyyaml-6.0.3-cp314-cp314-win_amd64.whl
+.\.venv-frutlups\Scripts\python.exe -m pip install --no-index --no-deps .\frutlups-0.4.2-py3-none-any.whl .\pyyaml-6.0.3-cp314-cp314-win_amd64.whl
 .\.venv-frutlups\Scripts\python.exe -m pip check
 .\.venv-frutlups\Scripts\Activate.ps1
 ```
@@ -148,6 +153,11 @@ admissible fresh work, preflight performs static checks without probing.
 - **Resume:** run `frutlups run` again in the same project location. An interrupted
   approved commit can be recovered once, without repeating completed seat work.
   Moving a stopped project to another directory is not a qualified recovery path.
+- **Manual blockers:** after an authorized human or architect resolves a legitimate
+  manual blocker through the template, 0.4.2 can continue without a runner dispatch
+  record for that manual round. Actual runner participation still needs its matching
+  policy. Resolution preserves frozen task fields and does not create or replenish
+  a grant, refund usage or duplicate a coder attempt.
 - **Unfinished attempts:** a reservation with no durable finish blocks new work.
   First establish what happened to the external work, then have an authorized
   human or architect record the resolution and honest usage using the template's
@@ -190,9 +200,12 @@ separate migration is planned; do not change format markers to force compatibili
 
 ## Qualification evidence
 
-The [release evidence](release_evidence.md) records the exact wheel and template
-identities, offline installed cases, 1,912-test source pass, composed live canary
-and remaining limitations. [Release history](changelog.md) describes older versions.
+The [0.4.2 evidence](release_evidence_0_4_2.md) records the exact artifact pair,
+F's eleven installed cases and 1,937-test source pass, T's 28 new offline
+observations and live pipeline, and its 257-test run with four declared skips.
+The live result includes operator-assisted holistic completion and a dispatch-free
+restart. [0.4.1 evidence](release_evidence.md) preserves the older qualification;
+[release history](changelog.md) describes prior versions.
 These references are separate from the steps needed to use the current release.
 
 ## Known limitations
@@ -203,5 +216,7 @@ can be over-redacted in captured evidence and cause a `seat_output` refusal.
 Avoid such short values in the launch environment; never put credentials in
 tracked configuration or reports.
 
-The public repository contains current source and documentation. The v0.4.1
-release tag and wheel remain fixed even when documentation on main is updated.
+The public repository contains current source and documentation. The v0.4.2
+tag contains documentation added after the wheel's source checkpoint. The frozen
+wheel retains its original payload; GitHub's source archives are not that qualified
+wheel. Later updates on main do not replace the release tag or wheel.

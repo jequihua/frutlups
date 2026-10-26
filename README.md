@@ -8,8 +8,8 @@ It is optional: the template's scripts also support a fully manual workflow.
 
 ## Get started
 
-1. Use the qualified **template 5.0.0 export** and **frutlups 0.4.1**.
-2. Download the wheel from [GitHub Releases](https://github.com/jequihua/frutlups/releases/tag/v0.4.1).
+1. Use the qualified **template 5.0.0 export** and **frutlups 0.4.2**.
+2. Download the wheel from [GitHub Releases](https://github.com/jequihua/frutlups/releases/tag/v0.4.2).
    Follow the [installation guide](docs/release.md#install-the-frozen-wheel) to
    verify its checksum and install it into a separate virtual environment.
 3. Configure your project and record an owner grant using the template's scripts.
@@ -53,6 +53,12 @@ Pi, Claude Code, effort settings and the configurable Pi record limit.
 Run it again to continue eligible work. An unfinished attempt requires inspection;
 frutlups will not silently repeat it.
 
+Version 0.4.2 fixes continuation after a legitimate manual blocker: once an
+authorized human or architect resolves it, work can resume without a runner
+dispatch record for a round that was entirely manual. Existing runner history
+still requires its matching policy. See the [0.4.2 evidence](docs/release_evidence_0_4_2.md)
+for qualification and the disclosed operator handoff during holistic completion.
+
 A `STOP` file at the project root prevents new admission and recovery effects.
 It is not an emergency interrupt for a model call already in progress.
 See [operating rules](docs/release.md#operating-rules) for recovery and stop handling.
@@ -66,4 +72,4 @@ See [operating rules](docs/release.md#operating-rules) for recovery and stop han
 
 The published wheel is the qualified artifact. Installing from source builds a
 new artifact and is intended for development. Later documentation updates do not
-replace the v0.4.1 wheel or release tag.
+replace the v0.4.2 wheel or release tag.

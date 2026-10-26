@@ -2,7 +2,7 @@
 
 ## Start here
 
-- [Install, configure and run](release.md): the published 0.4.1 release.
+- [Install, configure and run](release.md): the frozen 0.4.2 release.
 - [Models, delegation and limits](adapters.md): Pi and Claude Code settings.
 - [Usage reporting](usage.md): known totals, missing metrics and cost limitations.
 
@@ -14,8 +14,9 @@
 - [Historical deadline assessments](historical_eligibility.md): an explicit,
   owner-adopted exception for particular historical evidence, not ordinary setup
   or a general migration mechanism.
-- [Release evidence](release_evidence.md): exact artifact identities, installed and
-  live results, and qualification limits.
+- [0.4.2 evidence](release_evidence_0_4_2.md): exact artifact identities, manual-block
+  continuation, offline and live results, operator handoff and qualification limits.
+- [0.4.1 evidence](release_evidence.md): the preserved historical release record.
 - [Release history](changelog.md): prior releases, separated from current instructions.
 
 Configuration format identifiers are independent of package versions. Keep the

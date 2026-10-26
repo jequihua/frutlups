@@ -1,7 +1,22 @@
 # Release history
 
 These entries describe each release at the time. Historical limitations and pending
-work are not current instructions; use the [release guide](release.md) for 0.4.1.
+work are not current instructions; use the [release guide](release.md) for 0.4.2.
+
+## Release 0.4.2
+
+- **Manual-block continuation.** A resolved, entirely manual round can continue
+  without a runner dispatch record for work that never ran. Actual runner history
+  still requires its matching policy; authority, integrity, scope and allowance
+  refusals remain enforced. Resolution does not grant work or refund usage.
+- **Runtime delta.** Only `frutlups/loop.py` and the version literal in
+  `frutlups/__init__.py` differ from the frozen 0.4.1 wheel's runtime payload.
+- **Qualification.** F recorded eleven installed offline cases and 1,937 source
+  tests with zero skips. T added 28 new offline observations, inherited checks
+  with their original version attribution, the live exact-pair pipeline and 257
+  tests with four declared skips. Holistic completion required a disclosed
+  operator handoff; a fresh restart completed without dispatch. See the
+  [0.4.2 evidence](release_evidence_0_4_2.md) for identities and limits.
 
 ## Release 0.4.1
 
@@ -13,7 +28,7 @@ work are not current instructions; use the [release guide](release.md) for 0.4.1
   from 0.4.0. Only `frutlups/__init__.py` and `frutlups/_loop_evidence.py` differ
   between the two wheels.
 - **Qualification.** Qualified as the exact frozen wheel; see the
-  [release guide](release.md#qualification-evidence).
+  [0.4.1 evidence](release_evidence.md#qualification-evidence).
 
 ## Release 0.4.0 (superseded)
 

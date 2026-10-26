@@ -777,15 +777,37 @@ class Loop:
         if (render.resumes_contract(events[:issued_index], item.id) and prior_coded
                 and prior_coded.data.get("result") in ("blocked_authority", "blocked_environment")
                 and ledger._thaw(prior_coded.data.get("outcome")) == ledger._thaw(current.blocker)):
-            blocked = ledger.outcome(self.root, ledger._thaw(current.blocker), item.id,
-                                     ledger.read_reference(self.root, ledger._thaw(current.blocker))["round"])
-            prior_path = f"{directory}/{item.id}_r{blocked['round']}_dispatch.json"
-            prior = next((e for e in events if e.ev == ledger.Ev.artifact and e.data.get("path") == prior_path), None)
-            policy = (ledger.read_reference(self.root, {"path": prior_path, "sha": prior.data["sha"]})
-                      if prior else {})
-            ledger._need(policy.get("seat") == seat_policy and policy.get("runtime") == runtime_policy
-                         and policy.get("invocation") == blocked["invocation"],
-                         "blocked continuation lacks unchanged coder configuration")
+            # Manual blocks have no runner policy to replay. Actor labels and
+            # invocation spelling are not provenance: any coder start, attempt or
+            # dispatch in that round keeps the exact runner-policy requirement.
+            # Walk the consecutive blocked rounds so a later manual block cannot
+            # erase an earlier runner's still-frozen configuration.
+            for coded in reversed(events[:issued_index]):
+                if coded.ev != ledger.Ev.coded or coded.slice != item.id:
+                    continue
+                if coded.data.get("result") not in ("blocked_authority", "blocked_environment"):
+                    break
+                prior_stem = f"{item.id}_r{coded.round}"
+                prior_path = f"{directory}/{prior_stem}_dispatch.json"
+                prior = next((e for e in events if e.ev == ledger.Ev.artifact
+                              and e.data.get("path") == prior_path), None)
+                runner = any(
+                    e.round == coded.round and e.data.get("scope") == item.id and (
+                        e.ev == ledger.Ev.attempt_started and e.data.get("role") == "coder"
+                        or e.ev == ledger.Ev.artifact and e.data.get("path", "").rsplit("/", 1)[-1] in
+                            (f"{prior_stem}_started.json", f"{prior_stem}_dispatch.json")) for e in events)
+                runner = runner or any((self.root / p).exists() for p in (
+                    prior_path, f"{directory}/{prior_stem}_started.json",
+                    f"local_state/frutlups/coding/{prior_stem}.json"))
+                if not runner:
+                    continue
+                blocked = ledger.outcome(self.root, ledger._thaw(coded.data["outcome"]),
+                                         item.id, coded.round)
+                policy = (ledger.read_reference(self.root, {"path": prior_path, "sha": prior.data["sha"]})
+                          if prior else {})
+                ledger._need(policy.get("seat") == seat_policy and policy.get("runtime") == runtime_policy
+                             and policy.get("invocation") == blocked["invocation"],
+                             "blocked continuation lacks unchanged coder configuration")
         issued = next(e for e in reversed(events) if e.ev == ledger.Ev.prompt
                       and e.slice == item.id and e.round == current.round)
         original = evidence.bound_text(self.root, dict(path=current.last_prompt, sha=issued.data["sha"]),
